@@ -1,0 +1,14 @@
+[package]
+name = "btf-rs"
+license = "LGPL-2.0-or-later"
+version = "0.1.0"
+edition = "2021"
+description = "btf-rs is a parsing library for the BPF type format (BTF)"
+keywords = ["bpf", "btf", "ebpf"]
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+anyhow = "1.0"
+byteorder = "1.4"
