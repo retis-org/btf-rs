@@ -193,7 +193,7 @@ pub enum Type {
 }
 
 impl Type {
-    fn name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match &self {
             Type::Void => "void",
             Type::Int(_) => "int",
