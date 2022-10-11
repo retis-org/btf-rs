@@ -2,10 +2,11 @@
 
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, Read, Seek, SeekFrom},
     ffi::CStr,
     fs::File,
+    io::{BufRead, BufReader, Read, Seek, SeekFrom},
 };
+
 use anyhow::{anyhow, bail, Result};
 
 use crate::cbtf;
@@ -78,36 +79,43 @@ impl Btf {
 
             // Each BTF type needs specific handling to parse its type-specific
             // header.
-            types.insert(id, match bt.kind() {
-                1  => Type::Int(Int::from_reader(&mut reader, &endianness, bt)?),
-                2  => Type::Ptr(Ptr::new(bt)),
-                3  => Type::Array(Array::from_reader(&mut reader, &endianness, bt)?),
-                4  => Type::Struct(Struct::from_reader(&mut reader, &endianness, bt)?),
-                5  => Type::Union(Struct::from_reader(&mut reader, &endianness, bt)?),
-                6  => Type::Enum(Enum::from_reader(&mut reader, &endianness, bt)?),
-                7  => Type::Fwd(Fwd::new(bt)),
-                8  => Type::Typedef(Typedef::new(bt)),
-                9  => Type::Volatile(Volatile::new(bt)),
-                10 => Type::Const(Volatile::new(bt)),
-                11 => Type::Restrict(Volatile::new(bt)),
-                12 => Type::Func(Func::new(bt)),
-                13 => Type::FuncProto(FuncProto::from_reader(&mut reader, &endianness, bt)?),
-                14 => Type::Var(Var::from_reader(&mut reader, &endianness, bt)?),
-                15 => Type::Datasec(Datasec::from_reader(&mut reader, &endianness, bt)?),
-                16 => Type::Float(Float::new(bt)),
-                17 => Type::DeclTag(DeclTag::from_reader(&mut reader, &endianness, bt)?),
-                18 => Type::TypeTag(Typedef::new(bt)),
-                19 => Type::Enum64(Enum64::from_reader(&mut reader, &endianness, bt)?),
-                // We can't ignore unsupported types as we can't guess their
-                // size and thus how much to skip to the next type.
-                x => bail!("Unsupported BTF type '{}'", x),
-            });
+            types.insert(
+                id,
+                match bt.kind() {
+                    1 => Type::Int(Int::from_reader(&mut reader, &endianness, bt)?),
+                    2 => Type::Ptr(Ptr::new(bt)),
+                    3 => Type::Array(Array::from_reader(&mut reader, &endianness, bt)?),
+                    4 => Type::Struct(Struct::from_reader(&mut reader, &endianness, bt)?),
+                    5 => Type::Union(Struct::from_reader(&mut reader, &endianness, bt)?),
+                    6 => Type::Enum(Enum::from_reader(&mut reader, &endianness, bt)?),
+                    7 => Type::Fwd(Fwd::new(bt)),
+                    8 => Type::Typedef(Typedef::new(bt)),
+                    9 => Type::Volatile(Volatile::new(bt)),
+                    10 => Type::Const(Volatile::new(bt)),
+                    11 => Type::Restrict(Volatile::new(bt)),
+                    12 => Type::Func(Func::new(bt)),
+                    13 => Type::FuncProto(FuncProto::from_reader(&mut reader, &endianness, bt)?),
+                    14 => Type::Var(Var::from_reader(&mut reader, &endianness, bt)?),
+                    15 => Type::Datasec(Datasec::from_reader(&mut reader, &endianness, bt)?),
+                    16 => Type::Float(Float::new(bt)),
+                    17 => Type::DeclTag(DeclTag::from_reader(&mut reader, &endianness, bt)?),
+                    18 => Type::TypeTag(Typedef::new(bt)),
+                    19 => Type::Enum64(Enum64::from_reader(&mut reader, &endianness, bt)?),
+                    // We can't ignore unsupported types as we can't guess their
+                    // size and thus how much to skip to the next type.
+                    x => bail!("Unsupported BTF type '{}'", x),
+                },
+            );
 
             if bt.name_off > 0 {
                 let name_off = bt.name_off;
-                let name = str_cache.get(&name_off)
-                    .ok_or(anyhow!("Couldn't get string at offset {} defined in kind {}",
-                                   name_off, bt.kind()))?
+                let name = str_cache
+                    .get(&name_off)
+                    .ok_or(anyhow!(
+                        "Couldn't get string at offset {} defined in kind {}",
+                        name_off,
+                        bt.kind()
+                    ))?
                     .clone();
 
                 strings.insert(name, id);
@@ -236,7 +244,11 @@ pub struct Int {
 }
 
 impl Int {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<Int> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Int> {
         Ok(Int {
             btf_type,
             btf_int: cbtf::btf_int::from_reader(reader, endianness)?,
@@ -269,9 +281,7 @@ pub struct Ptr {
 
 impl Ptr {
     fn new(btf_type: cbtf::btf_type) -> Ptr {
-        Ptr {
-            btf_type,
-        }
+        Ptr { btf_type }
     }
 }
 
@@ -288,7 +298,11 @@ pub struct Array {
 }
 
 impl Array {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<Array> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Array> {
         Ok(Array {
             btf_type,
             btf_array: cbtf::btf_array::from_reader(reader, endianness)?,
@@ -309,17 +323,22 @@ pub struct Struct {
 }
 
 impl Struct {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<Struct> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Struct> {
         let mut members = Vec::new();
 
         for _ in 0..btf_type.vlen() {
-            members.push(Member::from_reader(reader, endianness, btf_type.kind_flag())?);
+            members.push(Member::from_reader(
+                reader,
+                endianness,
+                btf_type.kind_flag(),
+            )?);
         }
 
-        Ok(Struct {
-            btf_type,
-            members,
-        })
+        Ok(Struct { btf_type, members })
     }
 
     pub fn size(&self) -> usize {
@@ -340,7 +359,11 @@ pub struct Member {
 }
 
 impl Member {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, kind_flag: u32) -> Result<Member> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        kind_flag: u32,
+    ) -> Result<Member> {
         Ok(Member {
             kind_flag,
             btf_member: cbtf::btf_member::from_reader(reader, endianness)?,
@@ -379,17 +402,18 @@ pub struct Enum {
 }
 
 impl Enum {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<Enum> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Enum> {
         let mut members = Vec::new();
 
         for _ in 0..btf_type.vlen() {
             members.push(EnumMember::from_reader(reader, endianness)?);
         }
 
-        Ok(Enum {
-            btf_type,
-            members,
-        })
+        Ok(Enum { btf_type, members })
     }
 
     pub fn is_signed(&self) -> bool {
@@ -441,9 +465,7 @@ pub struct Fwd {
 
 impl Fwd {
     fn new(btf_type: cbtf::btf_type) -> Fwd {
-        Fwd {
-            btf_type,
-        }
+        Fwd { btf_type }
     }
 }
 
@@ -460,9 +482,7 @@ pub struct Typedef {
 
 impl Typedef {
     fn new(btf_type: cbtf::btf_type) -> Typedef {
-        Typedef {
-            btf_type,
-        }
+        Typedef { btf_type }
     }
 }
 
@@ -483,9 +503,7 @@ pub struct Volatile {
 
 impl Volatile {
     fn new(btf_type: cbtf::btf_type) -> Volatile {
-        Volatile {
-            btf_type,
-        }
+        Volatile { btf_type }
     }
 }
 
@@ -502,9 +520,7 @@ pub struct Func {
 
 impl Func {
     fn new(btf_type: cbtf::btf_type) -> Func {
-        Func {
-            btf_type,
-        }
+        Func { btf_type }
     }
 
     pub fn is_static(&self) -> bool {
@@ -537,7 +553,11 @@ pub struct FuncProto {
 }
 
 impl FuncProto {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<FuncProto> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<FuncProto> {
         let mut parameters = Vec::new();
 
         for _ in 0..btf_type.vlen() {
@@ -589,7 +609,11 @@ pub struct Var {
 }
 
 impl Var {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<Var> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Var> {
         Ok(Var {
             btf_type,
             btf_var: cbtf::btf_var::from_reader(reader, endianness)?,
@@ -622,7 +646,11 @@ pub struct Datasec {
 }
 
 impl Datasec {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<Datasec> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Datasec> {
         let mut variables = Vec::new();
 
         for _ in 0..btf_type.vlen() {
@@ -676,9 +704,7 @@ pub struct Float {
 
 impl Float {
     fn new(btf_type: cbtf::btf_type) -> Float {
-        Float {
-            btf_type,
-        }
+        Float { btf_type }
     }
 
     pub fn size(&self) -> usize {
@@ -699,7 +725,11 @@ pub struct DeclTag {
 }
 
 impl DeclTag {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<DeclTag> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<DeclTag> {
         Ok(DeclTag {
             btf_type,
             btf_decl_tag: cbtf::btf_decl_tag::from_reader(reader, endianness)?,
@@ -732,17 +762,18 @@ pub struct Enum64 {
 }
 
 impl Enum64 {
-    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness, btf_type: cbtf::btf_type) -> Result<Enum64> {
+    fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Enum64> {
         let mut members = Vec::new();
 
         for _ in 0..btf_type.vlen() {
             members.push(Enum64Member::from_reader(reader, endianness)?);
         }
 
-        Ok(Enum64 {
-            btf_type,
-            members,
-        })
+        Ok(Enum64 { btf_type, members })
     }
 
     pub fn is_signed(&self) -> bool {

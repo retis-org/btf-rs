@@ -6,6 +6,7 @@
 #![allow(non_camel_case_types, dead_code)]
 
 use std::io::Read;
+
 use anyhow::{bail, Result};
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 
@@ -59,16 +60,19 @@ impl btf_header {
             magic => bail!("Invalid BTF magic: {:#x}", magic),
         };
 
-        Ok((btf_header {
-            magic,
-            version: reader.read_u8()?,
-            flags: reader.read_u8()?,
-            hdr_len: endianness.u32_from_reader(reader)?,
-            type_off: endianness.u32_from_reader(reader)?,
-            type_len: endianness.u32_from_reader(reader)?,
-            str_off: endianness.u32_from_reader(reader)?,
-            str_len: endianness.u32_from_reader(reader)?,
-        }, endianness))
+        Ok((
+            btf_header {
+                magic,
+                version: reader.read_u8()?,
+                flags: reader.read_u8()?,
+                hdr_len: endianness.u32_from_reader(reader)?,
+                type_off: endianness.u32_from_reader(reader)?,
+                type_len: endianness.u32_from_reader(reader)?,
+                str_off: endianness.u32_from_reader(reader)?,
+                str_len: endianness.u32_from_reader(reader)?,
+            },
+            endianness,
+        ))
     }
 }
 
@@ -90,7 +94,10 @@ pub(super) struct btf_type {
 }
 
 impl btf_type {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_type> {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &Endianness,
+    ) -> Result<btf_type> {
         Ok(btf_type {
             name_off: endianness.u32_from_reader(reader)?,
             info: endianness.u32_from_reader(reader)?,
@@ -146,8 +153,8 @@ impl btf_int {
 }
 
 pub(super) const BTF_INT_SIGNED: u32 = 1 << 0;
-pub(super) const BTF_INT_CHAR: u32   = 1 << 1;
-pub(super) const BTF_INT_BOOL: u32   = 1 << 2;
+pub(super) const BTF_INT_CHAR: u32 = 1 << 1;
+pub(super) const BTF_INT_BOOL: u32 = 1 << 2;
 
 #[derive(Clone, Copy)]
 #[repr(C, packed)]
@@ -158,7 +165,10 @@ pub(super) struct btf_array {
 }
 
 impl btf_array {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_array> {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &Endianness,
+    ) -> Result<btf_array> {
         Ok(btf_array {
             r#type: endianness.u32_from_reader(reader)?,
             index_type: endianness.u32_from_reader(reader)?,
@@ -176,7 +186,10 @@ pub(super) struct btf_member {
 }
 
 impl btf_member {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_member> {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &Endianness,
+    ) -> Result<btf_member> {
         Ok(btf_member {
             name_off: endianness.u32_from_reader(reader)?,
             r#type: endianness.u32_from_reader(reader)?,
@@ -193,7 +206,10 @@ pub(super) struct btf_enum {
 }
 
 impl btf_enum {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_enum> {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &Endianness,
+    ) -> Result<btf_enum> {
         Ok(btf_enum {
             name_off: endianness.u32_from_reader(reader)?,
             val: endianness.i32_from_reader(reader)?,
@@ -213,7 +229,10 @@ pub(super) struct btf_param {
 }
 
 impl btf_param {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_param> {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &Endianness,
+    ) -> Result<btf_param> {
         Ok(btf_param {
             name_off: endianness.u32_from_reader(reader)?,
             r#type: endianness.u32_from_reader(reader)?,
@@ -244,7 +263,10 @@ pub(super) struct btf_var_secinfo {
 }
 
 impl btf_var_secinfo {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_var_secinfo> {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &Endianness,
+    ) -> Result<btf_var_secinfo> {
         Ok(btf_var_secinfo {
             r#type: endianness.u32_from_reader(reader)?,
             offset: endianness.u32_from_reader(reader)?,
@@ -260,7 +282,10 @@ pub(super) struct btf_decl_tag {
 }
 
 impl btf_decl_tag {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_decl_tag> {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &Endianness,
+    ) -> Result<btf_decl_tag> {
         Ok(btf_decl_tag {
             component_idx: endianness.i32_from_reader(reader)?,
         })
@@ -277,7 +302,10 @@ pub(super) struct btf_enum64 {
 
 // FIXME for signed values.
 impl btf_enum64 {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_enum64> {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &Endianness,
+    ) -> Result<btf_enum64> {
         Ok(btf_enum64 {
             name_off: endianness.u32_from_reader(reader)?,
             val_lo32: endianness.u32_from_reader(reader)?,
