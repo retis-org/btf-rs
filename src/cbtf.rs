@@ -54,6 +54,7 @@ pub(super) struct btf_header {
 impl btf_header {
     pub(super) fn from_reader<R: Read>(reader: &mut R) -> Result<(btf_header, Endianness)> {
         let magic = reader.read_u16::<LittleEndian>()?;
+        #[allow(clippy::mixed_case_hex_literals)]
         let endianness = match magic {
             0xeB9F => Endianness::Little,
             0x9FeB => Endianness::Big,

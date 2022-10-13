@@ -50,7 +50,7 @@ impl Btf {
 
         while offset < header.str_len {
             let mut raw = Vec::new();
-            let bytes = reader.read_until('\0' as u8, &mut raw)? as u32;
+            let bytes = reader.read_until(b'\0', &mut raw)? as u32;
 
             let s = CStr::from_bytes_with_nul(&raw)
                 .map_err(|e| anyhow!("Could not parse string: {}", e))?
@@ -111,7 +111,7 @@ impl Btf {
                 let name_off = bt.name_off;
                 let name = str_cache
                     .get(&name_off)
-                    .ok_or(anyhow!(
+                    .ok_or_else(|| anyhow!(
                         "Couldn't get string at offset {} defined in kind {}",
                         name_off,
                         bt.kind()
@@ -401,6 +401,7 @@ pub struct Enum {
     pub members: Vec<EnumMember>,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl Enum {
     fn from_reader<R: Read>(
         reader: &mut R,
@@ -524,15 +525,15 @@ impl Func {
     }
 
     pub fn is_static(&self) -> bool {
-        self.btf_type.vlen() & cbtf::BTF_FUNC_STATIC == cbtf::BTF_FUNC_STATIC
+        self.btf_type.vlen() == cbtf::BTF_FUNC_STATIC
     }
 
     pub fn is_global(&self) -> bool {
-        self.btf_type.vlen() & cbtf::BTF_FUNC_GLOBAL == cbtf::BTF_FUNC_GLOBAL
+        self.btf_type.vlen() == cbtf::BTF_FUNC_GLOBAL
     }
 
     pub fn is_extern(&self) -> bool {
-        self.btf_type.vlen() & cbtf::BTF_FUNC_EXTERN == cbtf::BTF_FUNC_EXTERN
+        self.btf_type.vlen() == cbtf::BTF_FUNC_EXTERN
     }
 }
 
@@ -761,6 +762,7 @@ pub struct Enum64 {
     pub members: Vec<Enum64Member>,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl Enum64 {
     fn from_reader<R: Read>(
         reader: &mut R,
