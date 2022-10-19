@@ -111,11 +111,13 @@ impl Btf {
                 let name_off = bt.name_off;
                 let name = str_cache
                     .get(&name_off)
-                    .ok_or_else(|| anyhow!(
-                        "Couldn't get string at offset {} defined in kind {}",
-                        name_off,
-                        bt.kind()
-                    ))?
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Couldn't get string at offset {} defined in kind {}",
+                            name_off,
+                            bt.kind()
+                        )
+                    })?
                     .clone();
 
                 strings.insert(name, id);
