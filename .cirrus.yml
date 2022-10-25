@@ -1,0 +1,21 @@
+container:
+  image: rust:latest
+
+test_task:
+  registry_cache:
+    folder: $CARGO_HOME/registry
+    fingerprint_script: cat Cargo.toml
+  target_cache:
+    folder: target
+    fingerprint_script:
+      - rustc --version
+      - cat Cargo.toml
+  setup_script:
+    - rustup component add rustfmt
+    - rustup component add clippy
+  build_script: cargo build --verbose
+  test_script: cargo test --verbose
+  check_script:
+    - cargo fmt --check
+    - cargo clippy -- -D warnings
+  before_cache_script: rm -rf $CARGO_HOME/registry/index

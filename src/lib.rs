@@ -18,7 +18,7 @@
 //!
 //! let btf = Btf::from_file("/sys/kernel/btf/vmlinux").unwrap();
 //!
-//! if let Type::Func(func) = btf.resolve_type_by_name("kfree_skb_reason").unwrap() {
+//! if let Type::Func(func) = btf.resolve_type_by_name("dev_get_by_name").unwrap() {
 //!     if let Type::FuncProto(proto) = btf.resolve_chained_type(&func).unwrap() {
 //!         for parameter in proto.parameters {
 //!             println!("{}", btf.resolve_name(&parameter).unwrap());
