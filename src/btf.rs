@@ -268,6 +268,10 @@ impl Int {
     pub fn is_bool(&self) -> bool {
         self.btf_int.encoding() & cbtf::BTF_INT_BOOL == cbtf::BTF_INT_BOOL
     }
+
+    pub fn size(&self) -> usize {
+        self.btf_type.size()
+    }
 }
 
 impl BtfType for Int {
