@@ -32,11 +32,13 @@ impl Btf {
     /// Parse a BTF object file and construct a Rust representation for later
     /// use.
     pub fn from_file(path: &str) -> Result<Btf> {
-        let mut reader = BufReader::new(File::open(path)?);
+        Self::from_reader(&mut BufReader::new(File::open(path)?))
+    }
 
+    fn from_reader<R: Seek + BufRead>(reader: &mut R) -> Result<Btf> {
         // First parse the BTF header, retrieve the endianness & perform sanity
         // checks.
-        let (header, endianness) = cbtf::btf_header::from_reader(&mut reader)?;
+        let (header, endianness) = cbtf::btf_header::from_reader(reader)?;
         if header.version != 1 {
             bail!("Unsupported BTF version: {}", header.version);
         }
@@ -75,32 +77,32 @@ impl Btf {
 
         let end_type_section = offset as u64 + header.type_len as u64;
         while reader.stream_position()? < end_type_section {
-            let bt = cbtf::btf_type::from_reader(&mut reader, &endianness)?;
+            let bt = cbtf::btf_type::from_reader(reader, &endianness)?;
 
             // Each BTF type needs specific handling to parse its type-specific
             // header.
             types.insert(
                 id,
                 match bt.kind() {
-                    1 => Type::Int(Int::from_reader(&mut reader, &endianness, bt)?),
+                    1 => Type::Int(Int::from_reader(reader, &endianness, bt)?),
                     2 => Type::Ptr(Ptr::new(bt)),
-                    3 => Type::Array(Array::from_reader(&mut reader, &endianness, bt)?),
-                    4 => Type::Struct(Struct::from_reader(&mut reader, &endianness, bt)?),
-                    5 => Type::Union(Struct::from_reader(&mut reader, &endianness, bt)?),
-                    6 => Type::Enum(Enum::from_reader(&mut reader, &endianness, bt)?),
+                    3 => Type::Array(Array::from_reader(reader, &endianness, bt)?),
+                    4 => Type::Struct(Struct::from_reader(reader, &endianness, bt)?),
+                    5 => Type::Union(Struct::from_reader(reader, &endianness, bt)?),
+                    6 => Type::Enum(Enum::from_reader(reader, &endianness, bt)?),
                     7 => Type::Fwd(Fwd::new(bt)),
                     8 => Type::Typedef(Typedef::new(bt)),
                     9 => Type::Volatile(Volatile::new(bt)),
                     10 => Type::Const(Volatile::new(bt)),
                     11 => Type::Restrict(Volatile::new(bt)),
                     12 => Type::Func(Func::new(bt)),
-                    13 => Type::FuncProto(FuncProto::from_reader(&mut reader, &endianness, bt)?),
-                    14 => Type::Var(Var::from_reader(&mut reader, &endianness, bt)?),
-                    15 => Type::Datasec(Datasec::from_reader(&mut reader, &endianness, bt)?),
+                    13 => Type::FuncProto(FuncProto::from_reader(reader, &endianness, bt)?),
+                    14 => Type::Var(Var::from_reader(reader, &endianness, bt)?),
+                    15 => Type::Datasec(Datasec::from_reader(reader, &endianness, bt)?),
                     16 => Type::Float(Float::new(bt)),
-                    17 => Type::DeclTag(DeclTag::from_reader(&mut reader, &endianness, bt)?),
+                    17 => Type::DeclTag(DeclTag::from_reader(reader, &endianness, bt)?),
                     18 => Type::TypeTag(Typedef::new(bt)),
-                    19 => Type::Enum64(Enum64::from_reader(&mut reader, &endianness, bt)?),
+                    19 => Type::Enum64(Enum64::from_reader(reader, &endianness, bt)?),
                     // We can't ignore unsupported types as we can't guess their
                     // size and thus how much to skip to the next type.
                     x => bail!("Unsupported BTF type '{}'", x),
