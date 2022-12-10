@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     ffi::CStr,
     fs::File,
-    io::{BufRead, BufReader, Read, Seek, SeekFrom},
+    io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom},
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -33,6 +33,11 @@ impl Btf {
     /// use.
     pub fn from_file(path: &str) -> Result<Btf> {
         Self::from_reader(&mut BufReader::new(File::open(path)?))
+    }
+
+    /// Performs the same actions as from_file(), but fed with a byte slice.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
+        Self::from_reader(&mut Cursor::new(bytes))
     }
 
     fn from_reader<R: Seek + BufRead>(reader: &mut R) -> Result<Btf> {
