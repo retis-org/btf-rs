@@ -1,5 +1,5 @@
 //! Parsing logic for the C representation of the BTF data. See,
-//! https://www.kernel.org/doc/html/latest/bpf/btf.html
+//! <https://www.kernel.org/doc/html/latest/bpf/btf.html>
 //!
 //! Please use a packed C representation so mem::size_of can be used.
 
