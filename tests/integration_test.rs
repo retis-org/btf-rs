@@ -1,33 +1,32 @@
-use anyhow::Result;
+use std::fs::read;
+
+use test_case::test_case;
 
 use btf_rs::*;
 
-fn init() -> Result<Btf> {
-    Btf::from_file("tests/data/vmlinux")
+fn bytes() -> Btf {
+    Btf::from_bytes(&read("tests/data/vmlinux").unwrap()).unwrap()
 }
 
-#[test]
-fn parse_btf() {
-    assert!(init().is_ok());
+fn file() -> Btf {
+    Btf::from_file("tests/data/vmlinux").unwrap()
 }
 
-#[test]
-fn resolve_type_by_name() {
-    let btf = init().unwrap();
-
+#[test_case(bytes())]
+#[test_case(file())]
+fn resolve_type_by_name(btf: Btf) {
     assert!(btf.resolve_type_by_name("consume_skb").is_ok());
 }
 
-#[test]
-fn resolve_type_by_name_unknown() {
-    let btf = init().unwrap();
-
+#[test_case(bytes())]
+#[test_case(file())]
+fn resolve_type_by_name_unknown(btf: Btf) {
     assert!(btf.resolve_type_by_name("not_a_known_function").is_err());
 }
 
-#[test]
-fn check_resolved_type() {
-    let btf = init().unwrap();
+#[test_case(bytes())]
+#[test_case(file())]
+fn check_resolved_type(btf: Btf) {
     let r#type = btf.resolve_type_by_name("sk_buff").unwrap();
 
     match r#type {
@@ -36,10 +35,9 @@ fn check_resolved_type() {
     }
 }
 
-#[test]
-fn bijection() {
-    let btf = init().unwrap();
-
+#[test_case(bytes())]
+#[test_case(file())]
+fn bijection(btf: Btf) {
     let func = match btf.resolve_type_by_name("kzalloc").unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
@@ -48,10 +46,9 @@ fn bijection() {
     assert!(btf.resolve_name(&func).unwrap() == "kzalloc");
 }
 
-#[test]
-fn resolve_function() {
-    let btf = init().unwrap();
-
+#[test_case(bytes())]
+#[test_case(file())]
+fn resolve_function(btf: Btf) {
     let func = match btf.resolve_type_by_name("kfree_skb_reason").unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
