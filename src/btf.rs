@@ -146,6 +146,14 @@ impl Btf {
         })
     }
 
+    /// Find a BTF id using its name as a key.
+    pub fn resolve_id_by_name(&self, name: &str) -> Result<u32> {
+        match self.strings.get(&name.to_string()) {
+            Some(id) => Ok(*id),
+            None => bail!("No type with name {}", name),
+        }
+    }
+
     /// Find a BTF type using its id as a key.
     pub fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
         match self.types.get(&id) {
@@ -156,12 +164,7 @@ impl Btf {
 
     /// Find a BTF type using its name as a key.
     pub fn resolve_type_by_name(&self, name: &str) -> Result<Type> {
-        let id = match self.strings.get(&name.to_string()) {
-            Some(id) => *id,
-            None => bail!("No type with name {}", name),
-        };
-
-        self.resolve_type_by_id(id)
+        self.resolve_type_by_id(self.resolve_id_by_name(name)?)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
