@@ -43,7 +43,7 @@ fn bijection(btf: Btf) {
         _ => panic!("Resolved type is not a function"),
     };
 
-    assert!(btf.resolve_name(&func).unwrap() == "kzalloc");
+    assert_eq!(btf.resolve_name(&func).unwrap(), "kzalloc");
 }
 
 #[test_case(bytes())]
@@ -54,20 +54,20 @@ fn resolve_function(btf: Btf) {
         _ => panic!("Resolved type is not a function"),
     };
 
-    assert!(func.is_static() == true);
-    assert!(func.is_global() == false);
-    assert!(func.is_extern() == false);
+    assert_eq!(func.is_static(), true);
+    assert_eq!(func.is_global(), false);
+    assert_eq!(func.is_extern(), false);
 
     let proto = match btf.resolve_chained_type(&func).unwrap() {
         Type::FuncProto(proto) => proto,
         _ => panic!("Resolved type is not a function proto"),
     };
 
-    assert!(proto.parameters.len() == 2);
-    assert!(btf.resolve_name(&proto.parameters[0]).unwrap() == "skb");
-    assert!(proto.parameters[0].is_variadic() == false);
-    assert!(btf.resolve_name(&proto.parameters[1]).unwrap() == "reason");
-    assert!(proto.parameters[1].is_variadic() == false);
+    assert_eq!(proto.parameters.len(), 2);
+    assert_eq!(btf.resolve_name(&proto.parameters[0]).unwrap(), "skb");
+    assert_eq!(proto.parameters[0].is_variadic(), false);
+    assert_eq!(btf.resolve_name(&proto.parameters[1]).unwrap(), "reason");
+    assert_eq!(proto.parameters[1].is_variadic(), false);
 
     match btf.resolve_type_by_id(proto.return_type_id()).unwrap() {
         Type::Void => (),
@@ -89,19 +89,19 @@ fn resolve_function(btf: Btf) {
         _ => panic!("Resolved type is not a struct"),
     };
 
-    assert!(btf.resolve_name(&r#struct).unwrap() == "sk_buff");
-    assert!(r#struct.size() == 232 as usize);
-    assert!(r#struct.members.len() == 28);
+    assert_eq!(btf.resolve_name(&r#struct).unwrap(), "sk_buff");
+    assert_eq!(r#struct.size(), 232);
+    assert_eq!(r#struct.members.len(), 28);
 
-    assert!(btf.resolve_name(&r#struct.members[25]).unwrap() == "truesize");
+    assert_eq!(btf.resolve_name(&r#struct.members[25]).unwrap(), "truesize");
 
     let arg = match btf.resolve_chained_type(&r#struct.members[25]).unwrap() {
         Type::Int(int) => int,
         _ => panic!("Resolved type is not an integer"),
     };
 
-    assert!(btf.resolve_name(&arg).unwrap() == "unsigned int");
-    assert!(arg.is_signed() == false);
-    assert!(arg.is_char() == false);
-    assert!(arg.is_bool() == false);
+    assert_eq!(btf.resolve_name(&arg).unwrap(), "unsigned int");
+    assert_eq!(arg.is_signed(), false);
+    assert_eq!(arg.is_char(), false);
+    assert_eq!(arg.is_bool(), false);
 }
