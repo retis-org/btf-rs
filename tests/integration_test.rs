@@ -14,6 +14,19 @@ fn file() -> Btf {
 
 #[test_case(bytes())]
 #[test_case(file())]
+fn resolve_id_by_name(btf: Btf) {
+    // Resolve primitive type.
+    assert_eq!(btf.resolve_id_by_name("int").unwrap(), 9);
+    // Resolve typedef.
+    assert_eq!(btf.resolve_id_by_name("u64").unwrap(), 14);
+    // Resolve struct.
+    assert_eq!(btf.resolve_id_by_name("sk_buff").unwrap(), 1987);
+    // Resolve function.
+    assert_eq!(btf.resolve_id_by_name("consume_skb").unwrap(), 126822);
+}
+
+#[test_case(bytes())]
+#[test_case(file())]
 fn resolve_type_by_name(btf: Btf) {
     assert!(btf.resolve_type_by_name("consume_skb").is_ok());
 }
@@ -39,6 +52,14 @@ fn check_resolved_type(btf: Btf) {
 #[test_case(file())]
 fn bijection(btf: Btf) {
     let func = match btf.resolve_type_by_name("kzalloc").unwrap() {
+        Type::Func(func) => func,
+        _ => panic!("Resolved type is not a function"),
+    };
+
+    assert_eq!(btf.resolve_name(&func).unwrap(), "kzalloc");
+
+    let func_id = btf.resolve_id_by_name("kzalloc").unwrap();
+    let func = match btf.resolve_type_by_id(func_id).unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
