@@ -75,9 +75,9 @@ fn resolve_function(btf: Btf) {
         _ => panic!("Resolved type is not a function"),
     };
 
-    assert_eq!(func.is_static(), true);
-    assert_eq!(func.is_global(), false);
-    assert_eq!(func.is_extern(), false);
+    assert!(func.is_static());
+    assert!(!func.is_global());
+    assert!(!func.is_extern());
 
     let proto = match btf.resolve_chained_type(&func).unwrap() {
         Type::FuncProto(proto) => proto,
@@ -86,9 +86,9 @@ fn resolve_function(btf: Btf) {
 
     assert_eq!(proto.parameters.len(), 2);
     assert_eq!(btf.resolve_name(&proto.parameters[0]).unwrap(), "skb");
-    assert_eq!(proto.parameters[0].is_variadic(), false);
+    assert!(!proto.parameters[0].is_variadic());
     assert_eq!(btf.resolve_name(&proto.parameters[1]).unwrap(), "reason");
-    assert_eq!(proto.parameters[1].is_variadic(), false);
+    assert!(!proto.parameters[1].is_variadic());
 
     match btf.resolve_type_by_id(proto.return_type_id()).unwrap() {
         Type::Void => (),
@@ -122,7 +122,7 @@ fn resolve_function(btf: Btf) {
     };
 
     assert_eq!(btf.resolve_name(&arg).unwrap(), "unsigned int");
-    assert_eq!(arg.is_signed(), false);
-    assert_eq!(arg.is_char(), false);
-    assert_eq!(arg.is_bool(), false);
+    assert!(!arg.is_signed());
+    assert!(!arg.is_char());
+    assert!(!arg.is_bool());
 }
