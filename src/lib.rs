@@ -43,6 +43,8 @@
 //! ```
 
 pub mod btf;
+
 mod cbtf;
+mod obj;
 
 pub use crate::btf::*;
