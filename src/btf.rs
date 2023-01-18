@@ -5,6 +5,7 @@ use std::{
     fs::File,
     io::{BufReader, Cursor, Read},
     path::Path,
+    sync::Arc,
 };
 
 use anyhow::{bail, Result};
@@ -15,7 +16,7 @@ use crate::obj::BtfObj;
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names.
 pub struct Btf {
-    obj: BtfObj,
+    obj: Arc<BtfObj>,
 }
 
 impl Btf {
@@ -26,14 +27,14 @@ impl Btf {
             bail!("Invalid BTF file {}", path.as_ref().display());
         }
         Ok(Btf {
-            obj: BtfObj::from_reader(&mut BufReader::new(File::open(path)?))?,
+            obj: Arc::new(BtfObj::from_reader(&mut BufReader::new(File::open(path)?))?),
         })
     }
 
     /// Performs the same actions as from_file(), but fed with a byte slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
-            obj: BtfObj::from_reader(&mut Cursor::new(bytes))?,
+            obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes))?),
         })
     }
 
