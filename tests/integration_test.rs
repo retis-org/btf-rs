@@ -126,3 +126,8 @@ fn resolve_function(btf: Btf) {
     assert!(!arg.is_char());
     assert!(!arg.is_bool());
 }
+
+#[test]
+fn wrong_file() {
+    assert!(Btf::from_file("/does/not/exist").is_err());
+}

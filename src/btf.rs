@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
 use std::{
+    convert::AsRef,
     fs::File,
     io::{BufReader, Cursor, Read},
+    path::Path,
 };
 
 use anyhow::{bail, Result};
@@ -19,7 +21,10 @@ pub struct Btf {
 impl Btf {
     /// Parse a BTF object file and construct a Rust representation for later
     /// use.
-    pub fn from_file(path: &str) -> Result<Btf> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
+        if !path.as_ref().is_file() {
+            bail!("Invalid BTF file {}", path.as_ref().display());
+        }
         Ok(Btf {
             obj: BtfObj::from_reader(&mut BufReader::new(File::open(path)?))?,
         })
