@@ -4,6 +4,7 @@ use std::{
     collections::HashMap,
     ffi::CStr,
     io::{BufRead, Seek, SeekFrom},
+    sync::Arc,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -26,11 +27,17 @@ pub(super) struct BtfObj {
     // retrieval by their id implicit as the id is incremental in the BTF file;
     // but that is really the goal here.
     types: HashMap<u32, Type>,
+    // Length of the string section. Used to calculate the next string offset
+    // of split BTFs.
+    str_len: u32,
 }
 
 impl BtfObj {
     /// Parse a BTF object from a Reader.
-    pub(super) fn from_reader<R: Seek + BufRead>(reader: &mut R) -> Result<BtfObj> {
+    pub(super) fn from_reader<R: Seek + BufRead>(
+        reader: &mut R,
+        base: Option<Arc<BtfObj>>,
+    ) -> Result<BtfObj> {
         // First parse the BTF header, retrieve the endianness & perform sanity
         // checks.
         let (header, endianness) = cbtf::btf_header::from_reader(reader)?;
@@ -45,6 +52,12 @@ impl BtfObj {
         let mut str_cache = HashMap::new();
         let mut offset: u32 = 0;
 
+        // For split BTFs both ids and string offsets are logically consecutive.
+        let (mut id, start_str_off) = match base {
+            None => (1, 0),
+            Some(ref base) => (base.types.len() as u32, base.str_len),
+        };
+
         while offset < header.str_len {
             let mut raw = Vec::new();
             let bytes = reader.read_until(b'\0', &mut raw)? as u32;
@@ -52,7 +65,7 @@ impl BtfObj {
             let s = CStr::from_bytes_with_nul(&raw)
                 .map_err(|e| anyhow!("Could not parse string: {}", e))?
                 .to_str()?;
-            str_cache.insert(offset, String::from(s));
+            str_cache.insert(start_str_off + offset, String::from(s));
 
             offset += bytes;
         }
@@ -63,12 +76,12 @@ impl BtfObj {
 
         let mut strings = HashMap::new();
         let mut types = HashMap::new();
-        let mut id = 0;
 
-        // The first type is reserved for void and not described in the type
-        // section.
-        types.insert(id, Type::Void);
-        id += 1;
+        if base.is_none() {
+            // Add special type Void with ID 0 (not described in type section)
+            // only on base BTF.
+            types.insert(0, Type::Void);
+        }
 
         let end_type_section = offset as u64 + header.type_len as u64;
         while reader.stream_position()? < end_type_section {
@@ -106,18 +119,19 @@ impl BtfObj {
 
             if bt.name_off > 0 {
                 let name_off = bt.name_off;
-                let name = str_cache
-                    .get(&name_off)
-                    .ok_or_else(|| {
-                        anyhow!(
+                let name = str_cache.get(&name_off);
+                if let Some(name) = name {
+                    strings.insert(name.clone(), id);
+                } else {
+                    // Just verify the integrity of the split BTF, but do not duplicate the strings
+                    if base.is_none() || base.as_ref().unwrap().str_cache.get(&name_off).is_none() {
+                        bail!(
                             "Couldn't get string at offset {} defined in kind {}",
                             name_off,
                             bt.kind()
-                        )
-                    })?
-                    .clone();
-
-                strings.insert(name, id);
+                        );
+                    }
+                }
             }
 
             id += 1;
@@ -133,6 +147,7 @@ impl BtfObj {
             str_cache,
             strings,
             types,
+            str_len: header.str_len,
         })
     }
 

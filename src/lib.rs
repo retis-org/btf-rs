@@ -41,6 +41,9 @@
 //!     }
 //! }
 //! ```
+//!
+//! Feature flags:
+//! - test_runtime: Use the system's runtime BTF files to perform extra integration tests.
 
 pub mod btf;
 

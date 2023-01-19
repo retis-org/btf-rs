@@ -17,53 +17,105 @@ use crate::obj::BtfObj;
 /// types and their associated names.
 pub struct Btf {
     obj: Arc<BtfObj>,
+    base: Option<Arc<BtfObj>>,
 }
 
 impl Btf {
-    /// Parse a BTF object file and construct a Rust representation for later
-    /// use.
+    /// Parse a stand-alone BTF object file and construct a Rust representation for later
+    /// use. Trying to open split BTF files using this function will fail. For split BTF
+    /// files use `Btf::from_split_file()`.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
+        Ok(Btf {
+            obj: Arc::new(BtfObj::from_reader(
+                &mut BufReader::new(File::open(path)?),
+                None,
+            )?),
+            base: None,
+        })
+    }
+
+    /// Parse a split BTF object file and construct a Rust representation for later
+    /// use. A base Btf object must be provided.
+    pub fn from_split_file<P: AsRef<Path>>(path: P, base: &Btf) -> Result<Btf> {
         if !path.as_ref().is_file() {
             bail!("Invalid BTF file {}", path.as_ref().display());
         }
+
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(&mut BufReader::new(File::open(path)?))?),
+            obj: Arc::new(BtfObj::from_reader(
+                &mut BufReader::new(File::open(path)?),
+                Some(base.obj.clone()),
+            )?),
+            base: Some(base.obj.clone()),
         })
     }
 
     /// Performs the same actions as from_file(), but fed with a byte slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes))?),
+            obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes), None)?),
+            base: None,
+        })
+    }
+
+    /// Performs the same actions as from_split_file(), but fed with a byte slice.
+    pub fn from_split_bytes(bytes: &[u8], base: &Btf) -> Result<Btf> {
+        let base = base.obj.clone();
+        Ok(Btf {
+            obj: Arc::new(BtfObj::from_reader(
+                &mut Cursor::new(bytes),
+                Some(base.clone()),
+            )?),
+            base: Some(base),
         })
     }
 
     /// Find a BTF id using its name as a key.
     pub fn resolve_id_by_name(&self, name: &str) -> Result<u32> {
-        self.obj.resolve_id_by_name(name)
+        match &self.base {
+            Some(base) => base
+                .resolve_id_by_name(name)
+                .or_else(|_| self.obj.resolve_id_by_name(name)),
+            None => self.obj.resolve_id_by_name(name),
+        }
     }
 
     /// Find a BTF type using its id as a key.
     pub fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
-        self.obj.resolve_type_by_id(id)
+        match &self.base {
+            Some(base) => base
+                .resolve_type_by_id(id)
+                .or_else(|_| self.obj.resolve_type_by_id(id)),
+            None => self.obj.resolve_type_by_id(id),
+        }
     }
 
     /// Find a BTF type using its name as a key.
     pub fn resolve_type_by_name(&self, name: &str) -> Result<Type> {
-        self.obj.resolve_type_by_name(name)
+        match &self.base {
+            Some(base) => base
+                .resolve_type_by_name(name)
+                .or_else(|_| self.obj.resolve_type_by_name(name)),
+            None => self.obj.resolve_type_by_name(name),
+        }
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
     pub fn resolve_name<T: BtfType>(&self, r#type: &T) -> Result<String> {
-        self.obj.resolve_name(r#type)
+        match &self.base {
+            Some(base) => base
+                .resolve_name(r#type)
+                .or_else(|_| self.obj.resolve_name(r#type)),
+            None => self.obj.resolve_name(r#type),
+        }
     }
 
     /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
     pub fn resolve_chained_type<T: BtfType>(&self, r#type: &T) -> Result<Type> {
-        self.obj.resolve_type_by_id(r#type.get_type_id()?)
+        self.resolve_type_by_id(r#type.get_type_id()?)
     }
 }
 
