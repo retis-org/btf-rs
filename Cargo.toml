@@ -1,10 +1,17 @@
 [package]
 name = "btf-rs"
-license = "LGPL-2.0-or-later"
 version = "0.1.0"
-edition = "2021"
-description = "btf-rs is a parsing library for the BPF type format (BTF)"
+license = "LGPL-2.0-or-later"
+license-file = "LICENSE"
+description = "Library for the BPF type format (BTF)."
+repository = "https://github.com/net-trace/btf-rs"
+homepage = "https://github.com/net-trace/btf-rs"
+readme = "README.md"
 keywords = ["bpf", "btf", "ebpf"]
+# Do not publish the tests and their data to save some space. Cargo files,
+# license & readme are always included.
+include = ["src/"]
+edition = "2021"
 
 [badges]
 maintenance = { status = "actively-developed" }
