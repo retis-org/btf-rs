@@ -22,3 +22,6 @@ byteorder = "1.4"
 
 [dev-dependencies]
 test-case = "2.2"
+
+[features]
+test_runtime = []
