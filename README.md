@@ -6,9 +6,9 @@ types, function prototypes, structure layouts, etc. and is often used, but not
 limited, to deal with [eBPF](https://ebpf.io) programs.
 
 This library was initially developed for a kernel packet tracking tool,
-[packet-tracer](https://github.com/net-trace/packet-tracer), but is exported on
-its own as there are no specific ties with the mentioned tool and can be
-(re)used in all kinds of Rust projects.
+[retis](https://github.com/retis-org/retis), but is exported on its own as there
+are no specific ties with the mentioned tool and can be (re)used in all kinds of
+Rust projects.
 
 ```toml
 [dependencies]
