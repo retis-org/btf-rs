@@ -128,20 +128,20 @@ pub enum Type {
     Ptr(Ptr),
     Array(Array),
     Struct(Struct),
-    Union(Struct),
+    Union(Union),
     Enum(Enum),
     Fwd(Fwd),
     Typedef(Typedef),
     Volatile(Volatile),
-    Const(Volatile),
-    Restrict(Volatile),
+    Const(Const),
+    Restrict(Restrict),
     Func(Func),
     FuncProto(FuncProto),
     Var(Var),
     Datasec(Datasec),
     Float(Float),
     DeclTag(DeclTag),
-    TypeTag(Typedef),
+    TypeTag(TypeTag),
     Enum64(Enum64),
 }
 
@@ -268,7 +268,7 @@ impl BtfType for Array {
     }
 }
 
-/// Rust representation for BTF type `BTF_KIND_STRUCT` and `BTF_KIND_UNION`.
+/// Rust representation for BTF type `BTF_KIND_STRUCT`.
 #[derive(Clone, Debug)]
 pub struct Struct {
     btf_type: cbtf::btf_type,
@@ -304,6 +304,9 @@ impl BtfType for Struct {
         Ok(self.btf_type.name_off)
     }
 }
+
+/// Rust representation for BTF type `BTF_KIND_UNION`.
+pub type Union = Struct;
 
 /// Represents a [`Struct`] member.
 #[derive(Clone, Debug)]
@@ -436,7 +439,7 @@ impl BtfType for Fwd {
     }
 }
 
-/// Rust representation for BTF type `BTF_KIND_TYPEDEF` and `BTF_KIND_TYPE_TAG`.
+/// Rust representation for BTF type `BTF_KIND_TYPEDEF`.
 #[derive(Clone, Debug)]
 pub struct Typedef {
     btf_type: cbtf::btf_type,
@@ -458,8 +461,10 @@ impl BtfType for Typedef {
     }
 }
 
-/// Rust representation for BTF type `BTF_KIND_VOLATILE`, `BTF_KIND_CONST` and
-/// `BTF_KIND_RESTRICT`.
+/// Rust representation for BTF type `BTF_KIND_TYPE_TAG`.
+pub type TypeTag = Typedef;
+
+/// Rust representation for BTF type `BTF_KIND_VOLATILE`.
 #[derive(Clone, Debug)]
 pub struct Volatile {
     btf_type: cbtf::btf_type,
@@ -476,6 +481,12 @@ impl BtfType for Volatile {
         Ok(self.btf_type.r#type())
     }
 }
+
+/// Rust representation for BTF type `BTF_KIND_CONST`.
+pub type Const = Volatile;
+
+/// Rust representation for BTF type `BTF_KIND_RESTRICT`.
+pub type Restrict = Volatile;
 
 /// Rust representation for BTF type `BTF_KIND_FUNC`.
 #[derive(Clone, Debug)]
