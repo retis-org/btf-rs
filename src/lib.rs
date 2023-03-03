@@ -98,4 +98,5 @@ pub mod btf;
 mod cbtf;
 mod obj;
 
+#[doc(inline)]
 pub use crate::btf::*;
