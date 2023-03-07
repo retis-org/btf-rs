@@ -2,7 +2,6 @@
 name = "btf-rs"
 version = "0.1.0"
 license = "LGPL-2.0-or-later"
-license-file = "LICENSE"
 description = "Library for the BPF type format (BTF)."
 repository = "https://github.com/retis-org/btf-rs"
 homepage = "https://github.com/retis-org/btf-rs"
