@@ -7,9 +7,9 @@ repository = "https://github.com/retis-org/btf-rs"
 homepage = "https://github.com/retis-org/btf-rs"
 readme = "README.md"
 keywords = ["bpf", "btf", "ebpf"]
-# Do not publish the tests and their data to save some space. Cargo files,
-# license & readme are always included.
-include = ["src/"]
+# Do not publish the tests and their data to save some space. Cargo files and
+# readme are always included.
+include = ["src/", "LICENSE"]
 edition = "2021"
 
 [badges]
