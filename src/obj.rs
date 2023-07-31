@@ -22,7 +22,7 @@ pub(super) struct BtfObj {
     str_cache: HashMap<u32, String>,
     // Map from symbol names to their type id, used for retrieving a type by its
     // name.
-    strings: HashMap<String, u32>,
+    strings: HashMap<String, Vec<u32>>,
     // Vector of all the types parsed from the BTF info. The vector makes the
     // retrieval by their id implicit as the id is incremental in the BTF file;
     // but that is really the goal here.
@@ -74,7 +74,7 @@ impl BtfObj {
         let offset = header.hdr_len + header.type_off;
         reader.seek(SeekFrom::Start(offset as u64))?;
 
-        let mut strings = HashMap::new();
+        let mut strings: HashMap<String, Vec<u32>> = HashMap::new();
         let mut types = HashMap::new();
 
         if base.is_none() {
@@ -121,7 +121,10 @@ impl BtfObj {
                 let name_off = bt.name_off;
                 let name = str_cache.get(&name_off);
                 if let Some(name) = name {
-                    strings.insert(name.clone(), id);
+                    match strings.get_mut(name) {
+                        Some(entry) => entry.push(id),
+                        None => _ = strings.insert(name.clone(), vec![id]),
+                    }
                 } else {
                     // Just verify the integrity of the split BTF, but do not duplicate the strings
                     if base.is_none() || base.as_ref().unwrap().str_cache.get(&name_off).is_none() {
@@ -151,11 +154,11 @@ impl BtfObj {
         })
     }
 
-    /// Find a BTF id using its name as a key.
-    pub(super) fn resolve_id_by_name(&self, name: &str) -> Result<u32> {
+    /// Find a list of BTF ids using their name as a key.
+    pub(super) fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
         match self.strings.get(&name.to_string()) {
-            Some(id) => Ok(*id),
-            None => bail!("No type with name {}", name),
+            Some(id) => Ok(id.clone()),
+            None => bail!("No id linked to name {name}"),
         }
     }
 
@@ -167,9 +170,13 @@ impl BtfObj {
         }
     }
 
-    /// Find a BTF type using its name as a key.
-    pub(super) fn resolve_type_by_name(&self, name: &str) -> Result<Type> {
-        self.resolve_type_by_id(self.resolve_id_by_name(name)?)
+    /// Find a list of BTF types using their name as a key.
+    pub(super) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
+        let mut types = Vec::new();
+        for id in self.resolve_ids_by_name(name)? {
+            types.push(self.resolve_type_by_id(id)?);
+        }
+        Ok(types)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF

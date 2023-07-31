@@ -61,7 +61,7 @@ as its first argument.
 ```rust
 let btf = Btf::from_file("/sys/kernel/btf/vmlinux").unwrap();
 
-let func = match btf.resolve_type_by_name("kfree_skb_reason").unwrap() {
+let func = match btf.resolve_types_by_name("kfree_skb_reason").unwrap().pop().unwrap() {
 	Type::Func(func) => func,
 	_ => panic!("Resolved type is not a function"),
 };

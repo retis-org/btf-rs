@@ -70,14 +70,23 @@ impl Btf {
         })
     }
 
-    /// Find a BTF id using its name as a key.
-    pub fn resolve_id_by_name(&self, name: &str) -> Result<u32> {
-        match &self.base {
-            Some(base) => base
-                .resolve_id_by_name(name)
-                .or_else(|_| self.obj.resolve_id_by_name(name)),
-            None => self.obj.resolve_id_by_name(name),
+    /// Find a list of BTF ids using their name as a key.
+    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        let mut ids = Vec::new();
+
+        if let Some(base) = &self.base {
+            if let Ok(mut ids_base) = base.resolve_ids_by_name(name) {
+                ids.append(&mut ids_base);
+            }
         }
+        if let Ok(mut ids_obj) = self.obj.resolve_ids_by_name(name) {
+            ids.append(&mut ids_obj);
+        }
+
+        if ids.is_empty() {
+            bail!("No id linked to name {name}");
+        }
+        Ok(ids)
     }
 
     /// Find a BTF type using its id as a key.
@@ -90,14 +99,25 @@ impl Btf {
         }
     }
 
-    /// Find a BTF type using its name as a key.
-    pub fn resolve_type_by_name(&self, name: &str) -> Result<Type> {
-        match &self.base {
-            Some(base) => base
-                .resolve_type_by_name(name)
-                .or_else(|_| self.obj.resolve_type_by_name(name)),
-            None => self.obj.resolve_type_by_name(name),
+    /// Find a list of BTF types using their name as a key.
+    pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
+        let mut types = Vec::new();
+
+        if let Some(base) = &self.base {
+            if let Ok(mut types_base) = base.resolve_types_by_name(name) {
+                types.append(&mut types_base);
+            }
         }
+        if let Ok(mut types_obj) = self.obj.resolve_types_by_name(name) {
+            types.append(&mut types_obj);
+        }
+
+        if types.is_empty() {
+            // Keep "id" and not "type" below to be consitent with
+            // BtfObj::resolve_types_by_name.
+            bail!("No id linked to name {name}");
+        }
+        Ok(types)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
