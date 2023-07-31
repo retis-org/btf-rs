@@ -89,14 +89,22 @@
 //! and members, etc. can be retrieved. For all those see the [`Type`] and its
 //! associated structures documentation.
 //!
-//! Feature flags:
+//! ### Additional objects
+//!
+//! Additional objects built on top of the ones described here can be found in
+//! the [`utils`] sub-module. Those are aimed at easing BTF consumption in
+//! common cases.
+//!
+//! ### Feature flags
+//!
 //! - test_runtime: Use the system's runtime BTF files to perform extra
 //!   integration tests.
 
 pub mod btf;
+pub mod utils;
 
 mod cbtf;
 mod obj;
 
 #[doc(inline)]
-pub use crate::btf::*;
+pub use btf::*;
