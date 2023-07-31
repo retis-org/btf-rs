@@ -79,7 +79,7 @@ impl Btf {
                 ids.append(&mut ids_base);
             }
         }
-        if let Ok(mut ids_obj) = self.obj.resolve_ids_by_name(name) {
+        if let Ok(mut ids_obj) = self.resolve_split_ids_by_name(name) {
             ids.append(&mut ids_obj);
         }
 
@@ -87,6 +87,12 @@ impl Btf {
             bail!("No id linked to name {name}");
         }
         Ok(ids)
+    }
+
+    /// Find a list of BTF ids using their name as a key, using the split BTF
+    /// definition only. For internal use only.
+    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        self.obj.resolve_ids_by_name(name)
     }
 
     /// Find a BTF type using its id as a key.
@@ -108,7 +114,7 @@ impl Btf {
                 types.append(&mut types_base);
             }
         }
-        if let Ok(mut types_obj) = self.obj.resolve_types_by_name(name) {
+        if let Ok(mut types_obj) = self.resolve_split_types_by_name(name) {
             types.append(&mut types_obj);
         }
 
@@ -118,6 +124,12 @@ impl Btf {
             bail!("No id linked to name {name}");
         }
         Ok(types)
+    }
+
+    /// Find a list of BTF types using their name as a key, using the split BTF
+    /// definition only. For internal use only.
+    pub(crate) fn resolve_split_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
+        self.obj.resolve_types_by_name(name)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
