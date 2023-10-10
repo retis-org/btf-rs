@@ -20,7 +20,7 @@ anyhow = "1.0"
 byteorder = "1.4"
 
 [dev-dependencies]
-test-case = "2.2"
+test-case = "3.2"
 
 [features]
 test_runtime = []
