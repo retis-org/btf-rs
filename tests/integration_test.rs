@@ -26,31 +26,42 @@ fn split_bytes() -> Btf {
 #[test_case(file())]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
-fn resolve_id_by_name(btf: Btf) {
+fn resolve_ids_by_name(btf: Btf) {
     // Resolve primitive type.
-    assert_eq!(btf.resolve_id_by_name("int").unwrap(), 21);
+    assert_eq!(btf.resolve_ids_by_name("int").unwrap().pop().unwrap(), 21);
     // Resolve typedef.
-    assert_eq!(btf.resolve_id_by_name("u64").unwrap(), 37);
+    assert_eq!(btf.resolve_ids_by_name("u64").unwrap().pop().unwrap(), 37);
     // Resolve struct.
-    assert_eq!(btf.resolve_id_by_name("sk_buff").unwrap(), 3482);
+    assert_eq!(
+        btf.resolve_ids_by_name("sk_buff").unwrap().pop().unwrap(),
+        3482
+    );
     // Resolve function.
-    assert_eq!(btf.resolve_id_by_name("consume_skb").unwrap(), 36977);
+    assert_eq!(
+        btf.resolve_ids_by_name("consume_skb")
+            .unwrap()
+            .pop()
+            .unwrap(),
+        36977
+    );
 }
 
 #[test_case(bytes())]
 #[test_case(file())]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
-fn resolve_type_by_name(btf: Btf) {
-    assert!(btf.resolve_type_by_name("consume_skb").is_ok());
+fn resolve_types_by_name(btf: Btf) {
+    let types = btf.resolve_types_by_name("consume_skb");
+    assert!(types.is_ok());
+    assert_eq!(types.unwrap().len(), 1);
 }
 
 #[test_case(bytes())]
 #[test_case(file())]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
-fn resolve_type_by_name_unknown(btf: Btf) {
-    assert!(btf.resolve_type_by_name("not_a_known_function").is_err());
+fn resolve_types_by_name_unknown(btf: Btf) {
+    assert!(btf.resolve_types_by_name("not_a_known_function").is_err());
 }
 
 #[test_case(bytes())]
@@ -58,9 +69,9 @@ fn resolve_type_by_name_unknown(btf: Btf) {
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 fn check_resolved_type(btf: Btf) {
-    let r#type = btf.resolve_type_by_name("sk_buff").unwrap();
+    let mut r#type = btf.resolve_types_by_name("sk_buff").unwrap();
 
-    match r#type {
+    match r#type.pop().unwrap() {
         Type::Struct(_) => (),
         _ => panic!("Resolved type is not a struct"),
     }
@@ -71,14 +82,14 @@ fn check_resolved_type(btf: Btf) {
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 fn bijection(btf: Btf) {
-    let func = match btf.resolve_type_by_name("vmalloc").unwrap() {
+    let func = match btf.resolve_types_by_name("vmalloc").unwrap().pop().unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
     assert_eq!(btf.resolve_name(&func).unwrap(), "vmalloc");
 
-    let func_id = btf.resolve_id_by_name("vmalloc").unwrap();
+    let func_id = btf.resolve_ids_by_name("vmalloc").unwrap().pop().unwrap();
     let func = match btf.resolve_type_by_id(func_id).unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
@@ -92,7 +103,12 @@ fn bijection(btf: Btf) {
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 fn resolve_function(btf: Btf) {
-    let func = match btf.resolve_type_by_name("kfree_skb_reason").unwrap() {
+    let func = match btf
+        .resolve_types_by_name("kfree_skb_reason")
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
@@ -157,7 +173,11 @@ fn wrong_file() {
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 fn resolve_split_struct(btf: Btf) {
-    let r#struct = btf.resolve_type_by_name("datapath").unwrap();
+    let r#struct = btf
+        .resolve_types_by_name("datapath")
+        .unwrap()
+        .pop()
+        .unwrap();
     let expected = &[
         "rcu",
         "list_node",
@@ -197,7 +217,12 @@ fn resolve_split_func(btf: Btf) {
     // 				  const struct dp_upcall_info *upcall_info,
     // 				  uint32_t cutlen)
 
-    let func = match btf.resolve_type_by_name("queue_userspace_packet").unwrap() {
+    let func = match btf
+        .resolve_types_by_name("queue_userspace_packet")
+        .unwrap()
+        .pop()
+        .unwrap()
+    {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
