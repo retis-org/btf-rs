@@ -203,7 +203,7 @@ impl btf_member {
 #[repr(C, packed)]
 pub(super) struct btf_enum {
     pub(super) name_off: u32,
-    pub(super) val: i32,
+    pub(super) val: u32,
 }
 
 impl btf_enum {
@@ -213,7 +213,7 @@ impl btf_enum {
     ) -> Result<btf_enum> {
         Ok(btf_enum {
             name_off: endianness.u32_from_reader(reader)?,
-            val: endianness.i32_from_reader(reader)?,
+            val: endianness.u32_from_reader(reader)?,
         })
     }
 }
@@ -301,7 +301,6 @@ pub(super) struct btf_enum64 {
     pub(super) val_hi32: u32,
 }
 
-// FIXME for signed values.
 impl btf_enum64 {
     pub(super) fn from_reader<R: Read>(
         reader: &mut R,
