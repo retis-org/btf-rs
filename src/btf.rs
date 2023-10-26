@@ -430,7 +430,7 @@ impl EnumMember {
         })
     }
 
-    pub fn val(&self) -> i32 {
+    pub fn val(&self) -> u32 {
         self.btf_enum.val
     }
 }
