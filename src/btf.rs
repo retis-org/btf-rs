@@ -284,7 +284,7 @@ impl Array {
 
 impl BtfType for Array {
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        Ok(self.btf_array.r#type)
     }
 }
 
