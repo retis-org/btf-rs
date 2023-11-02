@@ -190,6 +190,30 @@ impl Type {
             Type::Enum64(_) => "enum64",
         }
     }
+
+    pub fn as_btf_type(&self) -> Option<&dyn BtfType> {
+        match self {
+            Type::Int(i) => Some(i),
+            Type::Ptr(p) => Some(p),
+            Type::Array(a) => Some(a),
+            Type::Struct(s) => Some(s),
+            Type::Union(u) => Some(u),
+            Type::Enum(e) => Some(e),
+            Type::Fwd(f) => Some(f),
+            Type::Typedef(td) => Some(td),
+            Type::Volatile(v) => Some(v),
+            Type::Const(c) => Some(c),
+            Type::Restrict(r) => Some(r),
+            Type::Func(fu) => Some(fu),
+            Type::Var(v) => Some(v),
+            Type::Datasec(ds) => Some(ds),
+            Type::Float(f) => Some(f),
+            Type::DeclTag(dt) => Some(dt),
+            Type::TypeTag(tt) => Some(tt),
+            Type::Enum64(e64) => Some(e64),
+            _ => None,
+        }
+    }
 }
 
 pub trait BtfType {
