@@ -181,7 +181,7 @@ impl BtfObj {
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
-    pub(super) fn resolve_name<T: BtfType>(&self, r#type: &T) -> Result<String> {
+    pub(super) fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
         let offset = r#type.get_name_offset()?;
 
         match self.str_cache.get(&offset) {
@@ -193,7 +193,7 @@ impl BtfObj {
     /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
-    pub(super) fn resolve_chained_type<T: BtfType>(&self, r#type: &T) -> Result<Type> {
+    pub(super) fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
         self.resolve_type_by_id(r#type.get_type_id()?)
     }
 }

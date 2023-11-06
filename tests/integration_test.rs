@@ -50,6 +50,44 @@ fn resolve_ids_by_name(btf: Btf) {
 #[test_case(file())]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+fn iter_types(btf: Btf) {
+    // Iterate without looping ensuring non BtfTypes return None.
+    let vmalloc = match btf.resolve_types_by_name("vmalloc").unwrap().pop().unwrap() {
+        Type::Func(vmalloc) => vmalloc,
+        _ => panic!("Resolved type is not a function"),
+    };
+
+    let mut iter = btf.type_iter(&vmalloc);
+    assert!(iter.next().is_some());
+    assert!(iter.next().is_none());
+
+    let r#type = btf.resolve_types_by_name("sk_buff").unwrap().pop().unwrap();
+
+    let sk_buff = match r#type {
+        Type::Struct(x) => x,
+        _ => panic!("Resolved type is not a struct"),
+    };
+
+    let ml = sk_buff
+        .members
+        .iter()
+        .find(|&m| btf.resolve_name(m).unwrap().eq("mac_len"));
+
+    let types: Vec<Type> = btf
+        .type_iter(ml.unwrap())
+        .filter(|t| match t {
+            Type::Typedef(_) | Type::Int(_) => true,
+            _ => false,
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(types.len(), 2);
+}
+
+#[test_case(bytes())]
+#[test_case(file())]
+#[test_case(split_file())]
+#[test_case(split_bytes())]
 fn resolve_types_by_name(btf: Btf) {
     let types = btf.resolve_types_by_name("consume_skb");
     assert!(types.is_ok());

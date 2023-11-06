@@ -122,7 +122,7 @@ impl Btf {
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
-    pub fn resolve_name<T: BtfType>(&self, r#type: &T) -> Result<String> {
+    pub fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
         match &self.base {
             Some(base) => base
                 .resolve_name(r#type)
@@ -134,8 +134,45 @@ impl Btf {
     /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
-    pub fn resolve_chained_type<T: BtfType>(&self, r#type: &T) -> Result<Type> {
+    pub fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
         self.resolve_type_by_id(r#type.get_type_id()?)
+    }
+
+    /// This helper returns an iterator that allow to resolve a Type
+    /// referenced in another one all the way down to the chain.
+    /// The helper makes use of `Btf::resolve_chained_type()`.
+    pub fn type_iter<'a, T: BtfType + ?Sized>(&'a self, r#type: &'a T) -> TypeIter {
+        let ty = self.resolve_chained_type(r#type).ok();
+        TypeIter {
+            btf: self,
+            r#type: ty,
+        }
+    }
+}
+
+/// Iterator type returned by `Btf::type_iter()`.
+pub struct TypeIter<'a> {
+    btf: &'a Btf,
+    r#type: Option<Type>,
+}
+
+/// Iterator for `Btf::TypeIter`.
+impl<'a> Iterator for TypeIter<'a> {
+    type Item = Type;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.r#type.clone() {
+            None => None,
+            Some(ty) => {
+                self.r#type = match ty.as_btf_type() {
+                    Some(x) => self.btf.resolve_chained_type(x).ok(),
+                    // We might have encountered Void or other
+                    // non-BtfType types.
+                    None => None,
+                };
+                Some(ty)
+            }
+        }
     }
 }
 
@@ -188,6 +225,30 @@ impl Type {
             Type::DeclTag(_) => "decl-tag",
             Type::TypeTag(_) => "type-tag",
             Type::Enum64(_) => "enum64",
+        }
+    }
+
+    pub fn as_btf_type(&self) -> Option<&dyn BtfType> {
+        match self {
+            Type::Int(i) => Some(i),
+            Type::Ptr(p) => Some(p),
+            Type::Array(a) => Some(a),
+            Type::Struct(s) => Some(s),
+            Type::Union(u) => Some(u),
+            Type::Enum(e) => Some(e),
+            Type::Fwd(f) => Some(f),
+            Type::Typedef(td) => Some(td),
+            Type::Volatile(v) => Some(v),
+            Type::Const(c) => Some(c),
+            Type::Restrict(r) => Some(r),
+            Type::Func(fu) => Some(fu),
+            Type::Var(v) => Some(v),
+            Type::Datasec(ds) => Some(ds),
+            Type::Float(f) => Some(f),
+            Type::DeclTag(dt) => Some(dt),
+            Type::TypeTag(tt) => Some(tt),
+            Type::Enum64(e64) => Some(e64),
+            _ => None,
         }
     }
 }
@@ -269,6 +330,7 @@ pub struct Array {
     btf_array: cbtf::btf_array,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl Array {
     pub(super) fn from_reader<R: Read>(
         reader: &mut R,
@@ -279,6 +341,10 @@ impl Array {
             btf_type,
             btf_array: cbtf::btf_array::from_reader(reader, endianness)?,
         })
+    }
+
+    pub fn len(&self) -> usize {
+        self.btf_array.nelems as usize
     }
 }
 
