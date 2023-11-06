@@ -181,7 +181,7 @@ impl BtfObj {
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
-    pub(super) fn resolve_name<T: BtfType>(&self, r#type: &T) -> Result<String> {
+    pub(super) fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
         let offset = r#type.get_name_offset()?;
 
         match self.str_cache.get(&offset) {

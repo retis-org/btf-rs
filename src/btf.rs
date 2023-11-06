@@ -122,7 +122,7 @@ impl Btf {
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
-    pub fn resolve_name<T: BtfType>(&self, r#type: &T) -> Result<String> {
+    pub fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
         match &self.base {
             Some(base) => base
                 .resolve_name(r#type)
