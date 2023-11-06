@@ -330,6 +330,7 @@ pub struct Array {
     btf_array: cbtf::btf_array,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl Array {
     pub(super) fn from_reader<R: Read>(
         reader: &mut R,
@@ -340,6 +341,10 @@ impl Array {
             btf_type,
             btf_array: cbtf::btf_array::from_reader(reader, endianness)?,
         })
+    }
+
+    pub fn len(&self) -> usize {
+        self.btf_array.nelems as usize
     }
 }
 
