@@ -163,6 +163,20 @@ impl BtfObj {
         }
     }
 
+    /// Find a list of BTF ids whose names match a regex.
+    #[cfg(feature = "regex")]
+    pub(super) fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        Ok(self
+            .strings
+            .iter()
+            .filter_map(|(name, ids)| match re.is_match(name) {
+                true => Some(ids.clone()),
+                false => None,
+            })
+            .flatten()
+            .collect::<Vec<u32>>())
+    }
+
     /// Find a BTF type using its id as a key.
     pub(super) fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
         match self.types.get(&id) {
@@ -175,6 +189,16 @@ impl BtfObj {
     pub(super) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         let mut types = Vec::new();
         for id in self.resolve_ids_by_name(name)? {
+            types.push(self.resolve_type_by_id(id)?);
+        }
+        Ok(types)
+    }
+
+    /// Find a list of BTF types using a regex describing their name as a key.
+    #[cfg(feature = "regex")]
+    pub(super) fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+        let mut types = Vec::new();
+        for id in self.resolve_ids_by_regex(re)? {
             types.push(self.resolve_type_by_id(id)?);
         }
         Ok(types)

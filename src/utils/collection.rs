@@ -178,6 +178,37 @@ impl BtfCollection {
         Ok(ids)
     }
 
+    /// Find a list of BTF ids whose names match a regex.
+    ///
+    /// Matching ids can be found in multiple underlying BTF, thus this function
+    /// returns a list of tuples containing each a reference to `NamedBtf`
+    /// (representing the BTF where a match was found) and the id. Further
+    /// lookups must be done using the `Btf` object contained in the linked
+    /// `NamedBtf` one.
+    #[cfg(feature = "regex")]
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<(&NamedBtf, u32)>> {
+        let mut ids = self
+            .base
+            .btf
+            .resolve_ids_by_regex(re)
+            .unwrap_or_default()
+            .drain(..)
+            .map(|i| (&self.base, i))
+            .collect::<Vec<_>>();
+
+        for split in self.split.iter() {
+            if let Ok(mut mod_ids) = split.btf.resolve_split_ids_by_regex(re) {
+                mod_ids.drain(..).for_each(|i| ids.push((split, i)));
+            }
+        }
+
+        if ids.is_empty() {
+            bail!("No id linked to regex {re}");
+        }
+
+        Ok(ids)
+    }
+
     /// Find a list of BTF types using their name as a key. Matching types can
     /// be found in multiple underlying BTF, thus this function returns a list
     /// of tuples containing each a reference to `NamedBtf` (representing the
@@ -201,6 +232,36 @@ impl BtfCollection {
 
         if types.is_empty() {
             bail!("No type linked to name {name}");
+        }
+
+        Ok(types)
+    }
+
+    /// Find a list of BTF types using a regex describing their name as a key.
+    /// Matching types can be found in multiple underlying BTF, thus this
+    /// function returns a list of tuples containing each a reference to
+    /// `NamedBtf` (representing the BTF where a match was found) and the type.
+    /// Further lookups must be done using the `Btf` object contained in the
+    /// linked `NamedBtf` one.
+    #[cfg(feature = "regex")]
+    pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<(&NamedBtf, Type)>> {
+        let mut types = self
+            .base
+            .btf
+            .resolve_types_by_regex(re)
+            .unwrap_or_default()
+            .drain(..)
+            .map(|t| (&self.base, t))
+            .collect::<Vec<_>>();
+
+        for split in self.split.iter() {
+            if let Ok(mut mod_types) = split.btf.resolve_split_types_by_regex(re) {
+                mod_types.drain(..).for_each(|t| types.push((split, t)));
+            }
+        }
+
+        if types.is_empty() {
+            bail!("No type linked to regex {re}");
         }
 
         Ok(types)

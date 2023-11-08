@@ -99,6 +99,7 @@
 //!
 //! - elf: Enable helpers parsing the .BTF section of ELF files in
 //!   `utils::elf`.
+//! - regex: Enable name resolutions by regex (`regex::Regex`).
 //! - test_runtime: Use the system's runtime BTF files to perform extra
 //!   integration tests.
 
