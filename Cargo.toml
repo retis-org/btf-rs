@@ -18,9 +18,11 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 anyhow = "1.0"
 byteorder = "1.5"
+elf = { version = "0.7", optional = true }
 
 [dev-dependencies]
 test-case = "3.2"
 
 [features]
+elf = ["dep:elf"]
 test_runtime = []

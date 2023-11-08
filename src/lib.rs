@@ -97,6 +97,8 @@
 //!
 //! ### Feature flags
 //!
+//! - elf: Enable helpers parsing the .BTF section of ELF files in
+//!   `utils::elf`.
 //! - test_runtime: Use the system's runtime BTF files to perform extra
 //!   integration tests.
 

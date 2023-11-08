@@ -2,3 +2,5 @@
 //! use cases.
 
 pub mod collection;
+#[cfg(feature = "elf")]
+pub mod elf;
