@@ -157,7 +157,7 @@ impl BtfObj {
     /// Find a list of BTF ids using their name as a key.
     pub(super) fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
         match self.strings.get(&name.to_string()) {
-            Some(id) => Ok(id.clone()),
+            Some(ids) => Ok(ids.clone()),
             None => bail!("No id linked to name {name}"),
         }
     }
