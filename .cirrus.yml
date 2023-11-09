@@ -18,9 +18,11 @@ test_task:
     - cargo build --verbose -F elf
     - cargo build --verbose -F regex
     - cargo build --verbose -F elf,regex
+    - cargo build --verbose -F elf-compression
+    - cargo build --verbose -F elf-compression,regex
   test_script:
     - cargo test --verbose -F elf,regex
   check_script:
     - cargo fmt --check
-    - cargo clippy -F elf,regex -- -D warnings
+    - cargo clippy -F elf,elf-compression,regex -- -D warnings
   before_cache_script: rm -rf $CARGO_HOME/registry/index
