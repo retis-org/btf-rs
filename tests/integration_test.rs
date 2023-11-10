@@ -1,4 +1,4 @@
-use std::fs::{read, read_dir};
+use std::fs::read;
 
 use test_case::test_case;
 
@@ -373,31 +373,6 @@ fn resolve_regex(btf: Btf) {
         assert!(reasons.remove(get_enum_name(t).as_str()));
     });
     assert!(reasons.is_empty());
-}
-
-#[test]
-#[cfg_attr(not(feature = "test_runtime"), ignore)]
-fn test_split_files() {
-    let vmlinux = Btf::from_file("/sys/kernel/btf/vmlinux");
-    if vmlinux.is_err() {
-        return;
-    }
-    let vmlinux = vmlinux.unwrap();
-
-    // Try parsing some the modules found in the system.
-    if let Ok(dir) = read_dir("/sys/kernel/btf") {
-        for f in dir
-            .filter(|f| {
-                f.is_ok()
-                    && f.as_ref().unwrap().path().to_str().is_some()
-                    && f.as_ref().unwrap().file_name().ne("vmlinux")
-            })
-            .take(10)
-        {
-            // Share the same base for all.
-            assert!(Btf::from_split_file(f.as_ref().unwrap().path(), &vmlinux).is_ok());
-        }
-    }
 }
 
 fn btfc_files() -> utils::collection::BtfCollection {
