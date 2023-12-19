@@ -12,7 +12,7 @@ Rust projects.
 
 ```toml
 [dependencies]
-btf-rs = "0.1"
+btf-rs = "1.0"
 ```
 
 The [integration tests](tests/integration_test.rs) give good examples on how to
