@@ -338,3 +338,70 @@ fn test_split_files() {
         }
     }
 }
+
+fn btfc_files() -> utils::collection::BtfCollection {
+    let mut btfc = utils::collection::BtfCollection::from_file("tests/data/vmlinux").unwrap();
+    btfc.add_split_btf_from_file("tests/data/openvswitch")
+        .unwrap();
+    btfc
+}
+
+fn btfc_bytes() -> utils::collection::BtfCollection {
+    let mut btfc = utils::collection::BtfCollection::from_bytes(
+        "vmlinux",
+        &read("tests/data/vmlinux").unwrap(),
+    )
+    .unwrap();
+    btfc.add_split_btf_from_bytes("openvswitch", &read("tests/data/openvswitch").unwrap())
+        .unwrap();
+    btfc
+}
+
+fn btfc_dir() -> utils::collection::BtfCollection {
+    utils::collection::BtfCollection::from_dir("tests/data", "vmlinux").unwrap()
+}
+
+#[test_case(btfc_files())]
+#[test_case(btfc_bytes())]
+#[test_case(btfc_dir())]
+fn btfc(btfc: utils::collection::BtfCollection) {
+    // Resolve a function from vmlinux.
+    let mut types = btfc.resolve_types_by_name("vmalloc").unwrap();
+    let (nbtf, func) = match types.pop().unwrap() {
+        (nbtf, Type::Func(func)) => (nbtf, func),
+        _ => panic!("Resolved type is not a function"),
+    };
+
+    assert_eq!(nbtf.resolve_name(&func).unwrap(), "vmalloc");
+
+    let (nbtf, func_id) = btfc.resolve_ids_by_name("vmalloc").unwrap().pop().unwrap();
+    let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
+        Type::Func(func) => func,
+        _ => panic!("Resolved type is not a function"),
+    };
+
+    assert_eq!(nbtf.resolve_name(&func).unwrap(), "vmalloc");
+
+    // Resolve a function from the openvswitch module.
+    let mut types = btfc
+        .resolve_types_by_name("queue_userspace_packet")
+        .unwrap();
+    let (nbtf, func) = match types.pop().unwrap() {
+        (nbtf, Type::Func(func)) => (nbtf, func),
+        _ => panic!("Resolved type is not a function"),
+    };
+
+    assert_eq!(nbtf.resolve_name(&func).unwrap(), "queue_userspace_packet");
+
+    let (nbtf, func_id) = btfc
+        .resolve_ids_by_name("queue_userspace_packet")
+        .unwrap()
+        .pop()
+        .unwrap();
+    let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
+        Type::Func(func) => func,
+        _ => panic!("Resolved type is not a function"),
+    };
+
+    assert_eq!(nbtf.resolve_name(&func).unwrap(), "queue_userspace_packet");
+}
