@@ -517,6 +517,16 @@ impl Fwd {
     pub(super) fn new(btf_type: cbtf::btf_type) -> Fwd {
         Fwd { btf_type }
     }
+
+    /// Tests if the forward declaration is for a struct type.
+    pub fn is_struct(&self) -> bool {
+        self.btf_type.kind_flag() == 0
+    }
+
+    /// Tests if the forward declaration is for a union type.
+    pub fn is_union(&self) -> bool {
+        self.btf_type.kind_flag() == 1
+    }
 }
 
 impl BtfType for Fwd {
