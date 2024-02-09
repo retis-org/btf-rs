@@ -178,7 +178,7 @@ impl<'a> Iterator for TypeIter<'a> {
 
 /// Rust representation of BTF types. Each type then contains its own specific
 /// data and provides helpers to access it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Void,
     Int(Int),
@@ -264,7 +264,7 @@ pub trait BtfType {
 }
 
 /// Rust representation for BTF type `BTF_KIND_INT`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Int {
     btf_type: cbtf::btf_type,
     btf_int: cbtf::btf_int,
@@ -306,7 +306,7 @@ impl BtfType for Int {
 }
 
 /// Rust representation for BTF type `BTF_KIND_PTR`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Ptr {
     btf_type: cbtf::btf_type,
 }
@@ -324,7 +324,7 @@ impl BtfType for Ptr {
 }
 
 /// Rust representation for BTF type `BTF_KIND_ARRAY`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Array {
     btf_type: cbtf::btf_type,
     btf_array: cbtf::btf_array,
@@ -355,7 +355,7 @@ impl BtfType for Array {
 }
 
 /// Rust representation for BTF type `BTF_KIND_STRUCT`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Struct {
     btf_type: cbtf::btf_type,
     pub members: Vec<Member>,
@@ -395,7 +395,7 @@ impl BtfType for Struct {
 pub type Union = Struct;
 
 /// Represents a [`Struct`] member.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Member {
     kind_flag: u32,
     btf_member: cbtf::btf_member,
@@ -439,7 +439,7 @@ impl BtfType for Member {
 }
 
 /// Rust representation for BTF type `BTF_KIND_ENUM`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Enum {
     btf_type: cbtf::btf_type,
     pub members: Vec<EnumMember>,
@@ -481,7 +481,7 @@ impl BtfType for Enum {
 }
 
 /// Represents an [`Enum`] member.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnumMember {
     btf_enum: cbtf::btf_enum,
 }
@@ -508,7 +508,7 @@ impl BtfType for EnumMember {
 }
 
 /// Rust representation for BTF type `BTF_KIND_FWD`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Fwd {
     btf_type: cbtf::btf_type,
 }
@@ -536,7 +536,7 @@ impl BtfType for Fwd {
 }
 
 /// Rust representation for BTF type `BTF_KIND_TYPEDEF`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Typedef {
     btf_type: cbtf::btf_type,
 }
@@ -561,7 +561,7 @@ impl BtfType for Typedef {
 pub type TypeTag = Typedef;
 
 /// Rust representation for BTF type `BTF_KIND_VOLATILE`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Volatile {
     btf_type: cbtf::btf_type,
 }
@@ -585,7 +585,7 @@ pub type Const = Volatile;
 pub type Restrict = Volatile;
 
 /// Rust representation for BTF type `BTF_KIND_FUNC`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Func {
     btf_type: cbtf::btf_type,
 }
@@ -619,7 +619,7 @@ impl BtfType for Func {
 }
 
 /// Rust representation for BTF type `BTF_KIND_FUNC_PROTO`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FuncProto {
     btf_type: cbtf::btf_type,
     pub parameters: Vec<Parameter>,
@@ -649,7 +649,7 @@ impl FuncProto {
 }
 
 /// Represents a [`FuncProto`] parameter.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Parameter {
     btf_param: cbtf::btf_param,
 }
@@ -680,7 +680,7 @@ impl BtfType for Parameter {
 }
 
 /// Rust representation for BTF type `BTF_KIND_VAR`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Var {
     btf_type: cbtf::btf_type,
     btf_var: cbtf::btf_var,
@@ -718,7 +718,7 @@ impl BtfType for Var {
 }
 
 /// Rust representation for BTF type `BTF_KIND_DATASEC`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Datasec {
     btf_type: cbtf::btf_type,
     pub variables: Vec<VarSecinfo>,
@@ -750,7 +750,7 @@ impl BtfType for Datasec {
 }
 
 /// Represents a [`Datasec`] variable.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VarSecinfo {
     btf_var_secinfo: cbtf::btf_var_secinfo,
 }
@@ -781,7 +781,7 @@ impl BtfType for VarSecinfo {
 }
 
 /// Rust representation for BTF type `BTF_KIND_FLOAT`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Float {
     btf_type: cbtf::btf_type,
 }
@@ -803,7 +803,7 @@ impl BtfType for Float {
 }
 
 /// Rust representation for BTF type `BTF_KIND_DECL_TAG`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeclTag {
     btf_type: cbtf::btf_type,
     btf_decl_tag: cbtf::btf_decl_tag,
@@ -841,7 +841,7 @@ impl BtfType for DeclTag {
 }
 
 /// Rust representation for BTF type `BTF_KIND_ENUM64`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Enum64 {
     btf_type: cbtf::btf_type,
     pub members: Vec<Enum64Member>,
@@ -883,7 +883,7 @@ impl BtfType for Enum64 {
 }
 
 /// Represents an [`Enum64`] member.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Enum64Member {
     btf_enum64: cbtf::btf_enum64,
 }
