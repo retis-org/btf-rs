@@ -89,14 +89,23 @@
 //! and members, etc. can be retrieved. For all those see the [`Type`] and its
 //! associated structures documentation.
 //!
-//! Feature flags:
-//! - test_runtime: Use the system's runtime BTF files to perform extra
-//!   integration tests.
+//! ### Additional objects
+//!
+//! Additional objects built on top of the ones described here can be found in
+//! the [`utils`] sub-module. Those are aimed at easing BTF consumption in
+//! common cases.
+//!
+//! ### Feature flags
+//!
+//! - `elf`: Enable helpers parsing the .BTF section of ELF files in
+//!   [`utils::elf`].
+//! - `regex`: Enable name resolutions by regex ([`regex::Regex`]).
 
 pub mod btf;
+pub mod utils;
 
 mod cbtf;
 mod obj;
 
 #[doc(inline)]
-pub use crate::btf::*;
+pub use btf::*;
