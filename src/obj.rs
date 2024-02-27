@@ -119,21 +119,22 @@ impl BtfObj {
 
             if bt.name_off > 0 {
                 let name_off = bt.name_off;
-                let name = str_cache.get(&name_off);
-                if let Some(name) = name {
-                    match strings.get_mut(name) {
+                // Look for the name in our own cache, and if not found try
+                // looking into the base one (if any).
+                let name = str_cache
+                    .get(&name_off)
+                    .or_else(|| base.as_ref().and_then(|base| base.str_cache.get(&name_off)));
+
+                match name {
+                    Some(name) => match strings.get_mut(name) {
                         Some(entry) => entry.push(id),
                         None => _ = strings.insert(name.clone(), vec![id]),
-                    }
-                } else {
-                    // Just verify the integrity of the split BTF, but do not duplicate the strings
-                    if base.is_none() || base.as_ref().unwrap().str_cache.get(&name_off).is_none() {
-                        bail!(
-                            "Couldn't get string at offset {} defined in kind {}",
-                            name_off,
-                            bt.kind()
-                        );
-                    }
+                    },
+                    None => bail!(
+                        "Couldn't get string at offset {} defined in kind {}",
+                        name_off,
+                        bt.kind()
+                    ),
                 }
             }
 
@@ -157,7 +158,7 @@ impl BtfObj {
     /// Find a list of BTF ids using their name as a key.
     pub(super) fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
         match self.strings.get(&name.to_string()) {
-            Some(id) => Ok(id.clone()),
+            Some(ids) => Ok(ids.clone()),
             None => bail!("No id linked to name {name}"),
         }
     }

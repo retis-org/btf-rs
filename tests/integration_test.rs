@@ -32,10 +32,7 @@ fn resolve_ids_by_name(btf: Btf) {
     // Resolve typedef.
     assert_eq!(btf.resolve_ids_by_name("u64").unwrap().pop().unwrap(), 37);
     // Resolve struct.
-    assert_eq!(
-        btf.resolve_ids_by_name("sk_buff").unwrap().pop().unwrap(),
-        3482
-    );
+    assert_eq!(btf.resolve_ids_by_name("sk_buff").unwrap()[0], 3482);
     // Resolve function.
     assert_eq!(
         btf.resolve_ids_by_name("consume_skb")
