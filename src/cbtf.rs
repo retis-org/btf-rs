@@ -77,7 +77,7 @@ impl btf_header {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_type {
     pub(super) name_off: u32,
@@ -127,7 +127,7 @@ impl btf_type {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_int {
     data: u32,
@@ -157,7 +157,7 @@ pub(super) const BTF_INT_SIGNED: u32 = 1 << 0;
 pub(super) const BTF_INT_CHAR: u32 = 1 << 1;
 pub(super) const BTF_INT_BOOL: u32 = 1 << 2;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_array {
     pub(super) r#type: u32,
@@ -178,7 +178,7 @@ impl btf_array {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_member {
     pub(super) name_off: u32,
@@ -199,7 +199,7 @@ impl btf_member {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_enum {
     pub(super) name_off: u32,
@@ -222,7 +222,7 @@ pub(super) const BTF_FUNC_STATIC: u32 = 0;
 pub(super) const BTF_FUNC_GLOBAL: u32 = 1;
 pub(super) const BTF_FUNC_EXTERN: u32 = 2;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_param {
     pub(super) name_off: u32,
@@ -241,7 +241,7 @@ impl btf_param {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_var {
     pub(super) linkage: u32,
@@ -255,7 +255,7 @@ impl btf_var {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_var_secinfo {
     pub(super) r#type: u32,
@@ -276,7 +276,7 @@ impl btf_var_secinfo {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_decl_tag {
     pub(super) component_idx: i32,
@@ -293,7 +293,7 @@ impl btf_decl_tag {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, packed)]
 pub(super) struct btf_enum64 {
     pub(super) name_off: u32,
