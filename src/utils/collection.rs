@@ -156,17 +156,20 @@ impl BtfCollection {
     /// where a match was found) and the id. Further lookups must be done using
     /// the `Btf` object contained in the linked `NamedBtf` one.
     pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, u32)>> {
-        let mut ids = Vec::new();
-        let mut base_ids = self.base.btf.resolve_ids_by_name(name).unwrap_or_default();
+        let mut ids = self
+            .base
+            .btf
+            .resolve_ids_by_name(name)
+            .unwrap_or_default()
+            .drain(..)
+            .map(|i| (&self.base, i))
+            .collect::<Vec<_>>();
 
         for split in self.split.iter() {
             if let Ok(mut mod_ids) = split.btf.resolve_split_ids_by_name(name) {
                 mod_ids.drain(..).for_each(|i| ids.push((split, i)));
             }
         }
-
-        // Now add ids found in the base BTF.
-        base_ids.drain(..).for_each(|i| ids.push((&self.base, i)));
 
         if ids.is_empty() {
             bail!("No id linked to name {name}");
@@ -181,23 +184,20 @@ impl BtfCollection {
     /// BTF where a match was found) and the type. Further lookups must be done
     /// using the `Btf` object contained in the linked `NamedBtf` one.
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, Type)>> {
-        let mut types = Vec::new();
-        let mut base_types = self
+        let mut types = self
             .base
             .btf
             .resolve_types_by_name(name)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .drain(..)
+            .map(|t| (&self.base, t))
+            .collect::<Vec<_>>();
 
         for split in self.split.iter() {
             if let Ok(mut mod_types) = split.btf.resolve_split_types_by_name(name) {
                 mod_types.drain(..).for_each(|t| types.push((split, t)));
             }
         }
-
-        // Now add types found in the base BTF.
-        base_types
-            .drain(..)
-            .for_each(|t| types.push((&self.base, t)));
 
         if types.is_empty() {
             bail!("No type linked to name {name}");
