@@ -5,48 +5,75 @@ use test_case::test_case;
 use btf_rs::*;
 
 fn bytes() -> Btf {
-    Btf::from_bytes(&read("tests/data/vmlinux").unwrap()).unwrap()
+    Btf::from_bytes(&read("tests/data/btf/vmlinux").unwrap()).unwrap()
 }
 
 fn file() -> Btf {
-    Btf::from_file("tests/data/vmlinux").unwrap()
+    Btf::from_file("tests/data/btf/vmlinux").unwrap()
+}
+
+#[cfg(feature = "elf")]
+fn elf() -> Btf {
+    Btf::from_bytes(&utils::elf::extract_btf_from_file("tests/data/linux_build/vmlinux").unwrap())
+        .unwrap()
 }
 
 fn split_file() -> Btf {
-    let vmlinux = Btf::from_file("tests/data/vmlinux").unwrap();
-    Btf::from_split_file("tests/data/openvswitch", &vmlinux).unwrap()
+    let vmlinux = Btf::from_file("tests/data/btf/vmlinux").unwrap();
+    Btf::from_split_file("tests/data/btf/openvswitch", &vmlinux).unwrap()
 }
 
 fn split_bytes() -> Btf {
-    let vmlinux = Btf::from_bytes(&read("tests/data/vmlinux").unwrap()).unwrap();
-    Btf::from_split_bytes(&read("tests/data/openvswitch").unwrap(), &vmlinux).unwrap()
+    let vmlinux = Btf::from_bytes(&read("tests/data/btf/vmlinux").unwrap()).unwrap();
+    Btf::from_split_bytes(&read("tests/data/btf/openvswitch").unwrap(), &vmlinux).unwrap()
+}
+
+#[cfg(feature = "elf")]
+fn split_elf() -> Btf {
+    let vmlinux = Btf::from_bytes(
+        &utils::elf::extract_btf_from_file("tests/data/linux_build/vmlinux").unwrap(),
+    )
+    .unwrap();
+    Btf::from_split_bytes(
+        &utils::elf::extract_btf_from_file("tests/data/linux_build/net/openvswitch/openvswitch.ko")
+            .unwrap(),
+        &vmlinux,
+    )
+    .unwrap()
 }
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_ids_by_name(btf: Btf) {
     // Resolve primitive type.
-    assert_eq!(btf.resolve_ids_by_name("int").unwrap().pop().unwrap(), 21);
+    assert_eq!(btf.resolve_ids_by_name("int").unwrap().pop().unwrap(), 11);
     // Resolve typedef.
-    assert_eq!(btf.resolve_ids_by_name("u64").unwrap().pop().unwrap(), 37);
+    assert_eq!(btf.resolve_ids_by_name("u64").unwrap().pop().unwrap(), 58);
     // Resolve struct.
-    assert_eq!(btf.resolve_ids_by_name("sk_buff").unwrap()[0], 3482);
+    assert_eq!(
+        btf.resolve_ids_by_name("sk_buff").unwrap().pop().unwrap(),
+        4984
+    );
     // Resolve function.
     assert_eq!(
         btf.resolve_ids_by_name("consume_skb")
             .unwrap()
             .pop()
             .unwrap(),
-        36977
+        95474
     );
 }
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn iter_types(btf: Btf) {
     // Iterate without looping ensuring non BtfTypes return None.
     let vmalloc = match btf.resolve_types_by_name("vmalloc").unwrap().pop().unwrap() {
@@ -83,8 +110,10 @@ fn iter_types(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_types_by_name(btf: Btf) {
     let types = btf.resolve_types_by_name("consume_skb");
     assert!(types.is_ok());
@@ -93,16 +122,20 @@ fn resolve_types_by_name(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_types_by_name_unknown(btf: Btf) {
     assert!(btf.resolve_types_by_name("not_a_known_function").is_err());
 }
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn check_resolved_type(btf: Btf) {
     let mut r#type = btf.resolve_types_by_name("sk_buff").unwrap();
 
@@ -114,8 +147,10 @@ fn check_resolved_type(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn bijection(btf: Btf) {
     let func = match btf.resolve_types_by_name("vmalloc").unwrap().pop().unwrap() {
         Type::Func(func) => func,
@@ -135,8 +170,10 @@ fn bijection(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_function(btf: Btf) {
     let func = match btf
         .resolve_types_by_name("kfree_skb_reason")
@@ -207,6 +244,7 @@ fn wrong_file() {
 
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_split_struct(btf: Btf) {
     let r#struct = btf
         .resolve_types_by_name("datapath")
@@ -245,6 +283,7 @@ fn resolve_split_struct(btf: Btf) {
 
 #[test_case(split_file())]
 #[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_split_func(btf: Btf) {
     // Resolve the following function:
     // static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
@@ -337,8 +376,8 @@ fn test_split_files() {
 }
 
 fn btfc_files() -> utils::collection::BtfCollection {
-    let mut btfc = utils::collection::BtfCollection::from_file("tests/data/vmlinux").unwrap();
-    btfc.add_split_btf_from_file("tests/data/openvswitch")
+    let mut btfc = utils::collection::BtfCollection::from_file("tests/data/btf/vmlinux").unwrap();
+    btfc.add_split_btf_from_file("tests/data/btf/openvswitch")
         .unwrap();
     btfc
 }
@@ -346,21 +385,27 @@ fn btfc_files() -> utils::collection::BtfCollection {
 fn btfc_bytes() -> utils::collection::BtfCollection {
     let mut btfc = utils::collection::BtfCollection::from_bytes(
         "vmlinux",
-        &read("tests/data/vmlinux").unwrap(),
+        &read("tests/data/btf/vmlinux").unwrap(),
     )
     .unwrap();
-    btfc.add_split_btf_from_bytes("openvswitch", &read("tests/data/openvswitch").unwrap())
+    btfc.add_split_btf_from_bytes("openvswitch", &read("tests/data/btf/openvswitch").unwrap())
         .unwrap();
     btfc
 }
 
 fn btfc_dir() -> utils::collection::BtfCollection {
-    utils::collection::BtfCollection::from_dir("tests/data", "vmlinux").unwrap()
+    utils::collection::BtfCollection::from_dir("tests/data/btf", "vmlinux").unwrap()
+}
+
+#[cfg(feature = "elf")]
+fn btfc_elf() -> utils::collection::BtfCollection {
+    utils::elf::collection_from_kernel_dir("tests/data/linux_build").unwrap()
 }
 
 #[test_case(btfc_files())]
 #[test_case(btfc_bytes())]
 #[test_case(btfc_dir())]
+#[cfg_attr(feature = "elf", test_case(btfc_elf()))]
 fn btfc(btfc: utils::collection::BtfCollection) {
     // Resolve a function from vmlinux.
     let mut types = btfc.resolve_types_by_name("vmalloc").unwrap();

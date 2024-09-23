@@ -157,11 +157,7 @@ impl BtfCollection {
     /// the `Btf` object contained in the linked `NamedBtf` one.
     pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, u32)>> {
         let mut ids = Vec::new();
-
-        let mut base_ids = match self.base.btf.resolve_ids_by_name(name) {
-            Ok(base_ids) => base_ids,
-            _ => Vec::new(), // Id not found in base.
-        };
+        let mut base_ids = self.base.btf.resolve_ids_by_name(name).unwrap_or_default();
 
         for split in self.split.iter() {
             if let Ok(mut mod_ids) = split.btf.resolve_split_ids_by_name(name) {
@@ -186,11 +182,11 @@ impl BtfCollection {
     /// using the `Btf` object contained in the linked `NamedBtf` one.
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, Type)>> {
         let mut types = Vec::new();
-
-        let mut base_types = match self.base.btf.resolve_types_by_name(name) {
-            Ok(base_types) => base_types,
-            _ => Vec::new(), // Id not found in base.
-        };
+        let mut base_types = self
+            .base
+            .btf
+            .resolve_types_by_name(name)
+            .unwrap_or_default();
 
         for split in self.split.iter() {
             if let Ok(mut mod_types) = split.btf.resolve_split_types_by_name(name) {

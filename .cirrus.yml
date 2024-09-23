@@ -14,7 +14,7 @@ test_task:
     - rustup component add rustfmt
     - rustup component add clippy
   build_script: cargo build --verbose
-  test_script: cargo test --verbose
+  test_script: cargo test --verbose -F elf
   check_script:
     - cargo fmt --check
     - cargo clippy -- -D warnings
