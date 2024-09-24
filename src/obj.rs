@@ -156,41 +156,39 @@ impl BtfObj {
     }
 
     /// Find a list of BTF ids using their name as a key.
-    pub(super) fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
-        match self.strings.get(name) {
-            Some(ids) => Ok(ids.clone()),
-            None => bail!("No id linked to name {name}"),
-        }
+    pub(super) fn resolve_ids_by_name(&self, name: &str) -> Vec<u32> {
+        self.strings.get(name).cloned().unwrap_or_default()
     }
 
     /// Find a list of BTF ids whose names match a regex.
     #[cfg(feature = "regex")]
-    pub(super) fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
-        Ok(self
-            .strings
+    pub(super) fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
+        self.strings
             .iter()
             .filter_map(|(name, ids)| match re.is_match(name) {
                 true => Some(ids.clone()),
                 false => None,
             })
             .flatten()
-            .collect::<Vec<u32>>())
+            .collect::<Vec<_>>()
     }
 
     /// Find a BTF type using its id as a key.
-    pub(super) fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
-        match self.types.get(&id) {
-            Some(t) => Ok(t.clone()),
-            None => bail!("No type with id {}", id),
-        }
+    pub(super) fn resolve_type_by_id(&self, id: u32) -> Option<Type> {
+        self.types.get(&id).cloned()
     }
 
     /// Find a list of BTF types using their name as a key.
     pub(super) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         let mut types = Vec::new();
-        for id in self.resolve_ids_by_name(name)? {
-            types.push(self.resolve_type_by_id(id)?);
-        }
+        self.resolve_ids_by_name(name)
+            .iter()
+            .try_for_each(|id| -> Result<()> {
+                types.push(self.resolve_type_by_id(*id).ok_or_else(|| {
+                    anyhow!("BTF is corrupted: name ({name}) points to invalid type id ({id})")
+                })?);
+                Ok(())
+            })?;
         Ok(types)
     }
 
@@ -198,9 +196,14 @@ impl BtfObj {
     #[cfg(feature = "regex")]
     pub(super) fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         let mut types = Vec::new();
-        for id in self.resolve_ids_by_regex(re)? {
-            types.push(self.resolve_type_by_id(id)?);
-        }
+        self.resolve_ids_by_regex(re)
+            .iter()
+            .try_for_each(|id| -> Result<()> {
+                types.push(self.resolve_type_by_id(*id).ok_or_else(|| {
+                    anyhow!("BTF is corrupted: regex ({re}) points to invalid type id ({id})")
+                })?);
+                Ok(())
+            })?;
         Ok(types)
     }
 
@@ -208,17 +211,18 @@ impl BtfObj {
     /// object.
     pub(super) fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
         let offset = r#type.get_name_offset()?;
-
-        match self.str_cache.get(&offset) {
-            Some(s) => Ok(s.clone()),
-            None => bail!("No string at offset {}", offset),
-        }
+        self.str_cache
+            .get(&offset)
+            .cloned()
+            .ok_or_else(|| anyhow!("BTF is corrupted: no string at offset {offset}"))
     }
 
     /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
     pub(super) fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
-        self.resolve_type_by_id(r#type.get_type_id()?)
+        let id = r#type.get_type_id()?;
+        self.resolve_type_by_id(id)
+            .ok_or_else(|| anyhow!("BTF is corrupted: type has invalid id ({id})"))
     }
 }

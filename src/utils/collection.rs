@@ -155,27 +155,24 @@ impl BtfCollection {
     /// tuples containing each a reference to `NamedBtf` (representing the BTF
     /// where a match was found) and the id. Further lookups must be done using
     /// the `Btf` object contained in the linked `NamedBtf` one.
-    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, u32)>> {
+    pub fn resolve_ids_by_name(&self, name: &str) -> Vec<(&NamedBtf, u32)> {
         let mut ids = self
             .base
             .btf
             .resolve_ids_by_name(name)
-            .unwrap_or_default()
             .drain(..)
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
 
         for split in self.split.iter() {
-            if let Ok(mut mod_ids) = split.btf.resolve_split_ids_by_name(name) {
-                mod_ids.drain(..).for_each(|i| ids.push((split, i)));
-            }
+            split
+                .btf
+                .resolve_split_ids_by_name(name)
+                .drain(..)
+                .for_each(|i| ids.push((split, i)));
         }
 
-        if ids.is_empty() {
-            bail!("No id linked to name {name}");
-        }
-
-        Ok(ids)
+        ids
     }
 
     /// Find a list of BTF ids whose names match a regex.
@@ -186,27 +183,24 @@ impl BtfCollection {
     /// lookups must be done using the `Btf` object contained in the linked
     /// `NamedBtf` one.
     #[cfg(feature = "regex")]
-    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<(&NamedBtf, u32)>> {
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Vec<(&NamedBtf, u32)> {
         let mut ids = self
             .base
             .btf
             .resolve_ids_by_regex(re)
-            .unwrap_or_default()
             .drain(..)
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
 
         for split in self.split.iter() {
-            if let Ok(mut mod_ids) = split.btf.resolve_split_ids_by_regex(re) {
-                mod_ids.drain(..).for_each(|i| ids.push((split, i)));
-            }
+            split
+                .btf
+                .resolve_split_ids_by_regex(re)
+                .drain(..)
+                .for_each(|i| ids.push((split, i)));
         }
 
-        if ids.is_empty() {
-            bail!("No id linked to regex {re}");
-        }
-
-        Ok(ids)
+        ids
     }
 
     /// Find a list of BTF types using their name as a key. Matching types can
@@ -218,20 +212,17 @@ impl BtfCollection {
         let mut types = self
             .base
             .btf
-            .resolve_types_by_name(name)
-            .unwrap_or_default()
+            .resolve_types_by_name(name)?
             .drain(..)
             .map(|t| (&self.base, t))
             .collect::<Vec<_>>();
 
         for split in self.split.iter() {
-            if let Ok(mut mod_types) = split.btf.resolve_split_types_by_name(name) {
-                mod_types.drain(..).for_each(|t| types.push((split, t)));
-            }
-        }
-
-        if types.is_empty() {
-            bail!("No type linked to name {name}");
+            split
+                .btf
+                .resolve_split_types_by_name(name)?
+                .drain(..)
+                .for_each(|t| types.push((split, t)));
         }
 
         Ok(types)
@@ -248,20 +239,17 @@ impl BtfCollection {
         let mut types = self
             .base
             .btf
-            .resolve_types_by_regex(re)
-            .unwrap_or_default()
+            .resolve_types_by_regex(re)?
             .drain(..)
             .map(|t| (&self.base, t))
             .collect::<Vec<_>>();
 
         for split in self.split.iter() {
-            if let Ok(mut mod_types) = split.btf.resolve_split_types_by_regex(re) {
-                mod_types.drain(..).for_each(|t| types.push((split, t)));
-            }
-        }
-
-        if types.is_empty() {
-            bail!("No type linked to regex {re}");
+            split
+                .btf
+                .resolve_split_types_by_regex(re)?
+                .drain(..)
+                .for_each(|t| types.push((split, t)));
         }
 
         Ok(types)
