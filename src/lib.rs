@@ -56,7 +56,12 @@
 //!
 //! let btf = Btf::from_file("/sys/kernel/btf/vmlinux").unwrap();
 //!
-//! let func = match btf.resolve_types_by_name("kfree_skb_reason").unwrap().pop().unwrap() {
+//! let func = match btf
+//!     .resolve_types_by_name("kfree_skb_reason")
+//!     .unwrap()
+//!     .pop()
+//!     .unwrap()
+//! {
 //!     Type::Func(func) => func,
 //!     _ => panic!("Resolved type is not a function"),
 //! };
@@ -99,6 +104,7 @@
 //!
 //! - elf: Enable helpers parsing the .BTF section of ELF files in
 //!   `utils::elf`.
+//! - regex: Enable name resolutions by regex (`regex::Regex`).
 //! - test_runtime: Use the system's runtime BTF files to perform extra
 //!   integration tests.
 

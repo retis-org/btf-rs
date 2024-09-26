@@ -50,22 +50,13 @@ fn split_elf() -> Btf {
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_ids_by_name(btf: Btf) {
     // Resolve primitive type.
-    assert_eq!(btf.resolve_ids_by_name("int").unwrap().pop().unwrap(), 11);
+    assert_eq!(btf.resolve_ids_by_name("int").pop().unwrap(), 11);
     // Resolve typedef.
-    assert_eq!(btf.resolve_ids_by_name("u64").unwrap().pop().unwrap(), 58);
+    assert_eq!(btf.resolve_ids_by_name("u64").pop().unwrap(), 58);
     // Resolve struct.
-    assert_eq!(
-        btf.resolve_ids_by_name("sk_buff").unwrap().pop().unwrap(),
-        4984
-    );
+    assert_eq!(btf.resolve_ids_by_name("sk_buff").pop().unwrap(), 4984);
     // Resolve function.
-    assert_eq!(
-        btf.resolve_ids_by_name("consume_skb")
-            .unwrap()
-            .pop()
-            .unwrap(),
-        95474
-    );
+    assert_eq!(btf.resolve_ids_by_name("consume_skb").pop().unwrap(), 95474);
 }
 
 #[test_case(bytes())]
@@ -115,9 +106,8 @@ fn iter_types(btf: Btf) {
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_types_by_name(btf: Btf) {
-    let types = btf.resolve_types_by_name("consume_skb");
-    assert!(types.is_ok());
-    assert_eq!(types.unwrap().len(), 1);
+    let types = btf.resolve_types_by_name("consume_skb").unwrap();
+    assert_eq!(types.len(), 1);
 }
 
 #[test_case(bytes())]
@@ -127,7 +117,10 @@ fn resolve_types_by_name(btf: Btf) {
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_types_by_name_unknown(btf: Btf) {
-    assert!(btf.resolve_types_by_name("not_a_known_function").is_err());
+    assert!(btf
+        .resolve_types_by_name("not_a_known_function")
+        .unwrap()
+        .is_empty());
 }
 
 #[test_case(bytes())]
@@ -159,7 +152,7 @@ fn bijection(btf: Btf) {
 
     assert_eq!(btf.resolve_name(&func).unwrap(), "vmalloc");
 
-    let func_id = btf.resolve_ids_by_name("vmalloc").unwrap().pop().unwrap();
+    let func_id = btf.resolve_ids_by_name("vmalloc").pop().unwrap();
     let func = match btf.resolve_type_by_id(func_id).unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
@@ -350,6 +343,38 @@ fn resolve_split_func(btf: Btf) {
     assert_eq!(struct1.members.len(), 28);
 }
 
+#[test_case(split_file())]
+#[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg(feature = "regex")]
+fn resolve_regex(btf: Btf) {
+    use std::collections::HashSet;
+
+    // Look for drop reason enums:
+    // - skb_drop_reason
+    // - mac80211_drop_reason
+    // - ovs_drop_reason
+    let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
+    let ids = btf.resolve_ids_by_regex(&re);
+    assert_eq!(ids.len(), 3);
+
+    let types = btf.resolve_types_by_regex(&re).unwrap();
+    assert_eq!(types.len(), 3);
+
+    let mut reasons = HashSet::from(["ovs_drop_reason", "mac80211_drop_reason", "skb_drop_reason"]);
+    let get_enum_name = |r#type: &Type| {
+        let r#enum = match r#type {
+            Type::Enum(r#enum) => r#enum,
+            _ => panic!("Type is not an enum"),
+        };
+        btf.resolve_name(r#enum).unwrap()
+    };
+    types.iter().for_each(|t| {
+        assert!(reasons.remove(get_enum_name(t).as_str()));
+    });
+    assert!(reasons.is_empty());
+}
+
 #[test]
 #[cfg_attr(not(feature = "test_runtime"), ignore)]
 fn test_split_files() {
@@ -416,7 +441,7 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 
     assert_eq!(nbtf.resolve_name(&func).unwrap(), "vmalloc");
 
-    let (nbtf, func_id) = btfc.resolve_ids_by_name("vmalloc").unwrap().pop().unwrap();
+    let (nbtf, func_id) = btfc.resolve_ids_by_name("vmalloc").pop().unwrap();
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
@@ -437,7 +462,6 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 
     let (nbtf, func_id) = btfc
         .resolve_ids_by_name("queue_userspace_packet")
-        .unwrap()
         .pop()
         .unwrap();
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
@@ -457,4 +481,37 @@ fn btfc(btfc: utils::collection::BtfCollection) {
         _ => panic!("Resolved type is not a function"),
     };
     assert_eq!(ovs.resolve_name(&func).unwrap(), "queue_userspace_packet");
+}
+
+#[test_case(btfc_files())]
+#[test_case(btfc_bytes())]
+#[test_case(btfc_dir())]
+#[cfg_attr(feature = "elf", test_case(btfc_elf()))]
+#[cfg(feature = "regex")]
+fn btfc_resolve_regex(btfc: utils::collection::BtfCollection) {
+    use std::collections::HashSet;
+
+    // Look for drop reason enums:
+    // - skb_drop_reason
+    // - mac80211_drop_reason
+    // - ovs_drop_reason
+    let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
+    let ids = btfc.resolve_ids_by_regex(&re);
+    assert_eq!(ids.len(), 3);
+
+    let types = btfc.resolve_types_by_regex(&re).unwrap();
+    assert_eq!(types.len(), 3);
+
+    let mut reasons = HashSet::from(["ovs_drop_reason", "mac80211_drop_reason", "skb_drop_reason"]);
+    let get_enum_name = |r#type: &(&utils::collection::NamedBtf, btf_rs::Type)| {
+        let (nbtf, r#enum) = match r#type {
+            (nbtf, Type::Enum(r#enum)) => (nbtf, r#enum),
+            _ => panic!("Type is not an enum"),
+        };
+        nbtf.resolve_name(r#enum).unwrap()
+    };
+    types.iter().for_each(|t| {
+        assert!(reasons.remove(get_enum_name(t).as_str()));
+    });
+    assert!(reasons.is_empty());
 }
