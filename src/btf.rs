@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 
 use crate::cbtf;
 use crate::obj::BtfObj;
@@ -71,58 +71,59 @@ impl Btf {
     }
 
     /// Find a list of BTF ids using their name as a key.
-    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
-        let mut ids = Vec::new();
+    pub fn resolve_ids_by_name(&self, name: &str) -> Vec<u32> {
+        let mut ids = self.resolve_split_ids_by_name(name);
 
         if let Some(base) = &self.base {
-            if let Ok(mut ids_base) = base.resolve_ids_by_name(name) {
-                ids.append(&mut ids_base);
-            }
-        }
-        if let Ok(mut ids_obj) = self.resolve_split_ids_by_name(name) {
-            ids.append(&mut ids_obj);
+            ids.append(&mut base.resolve_ids_by_name(name));
         }
 
-        if ids.is_empty() {
-            bail!("No id linked to name {name}");
-        }
-        Ok(ids)
+        ids
     }
 
     /// Find a list of BTF ids using their name as a key, using the split BTF
     /// definition only. For internal use only.
-    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Vec<u32> {
         self.obj.resolve_ids_by_name(name)
     }
 
+    /// Find a list of BTF ids whose names match a regex.
+    #[cfg(feature = "regex")]
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
+        let mut ids = self.resolve_split_ids_by_regex(re);
+
+        if let Some(base) = &self.base {
+            ids.append(&mut base.resolve_ids_by_regex(re));
+        }
+
+        ids
+    }
+
+    /// Find a list of BTF ids whose names match a regex, using the split BTF
+    /// definition only. For internal use only.
+    #[cfg(feature = "regex")]
+    pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
+        self.obj.resolve_ids_by_regex(re)
+    }
+
     /// Find a BTF type using its id as a key.
-    pub fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
+    pub fn resolve_type_by_id(&self, id: u32) -> Option<Type> {
         match &self.base {
             Some(base) => base
                 .resolve_type_by_id(id)
-                .or_else(|_| self.obj.resolve_type_by_id(id)),
+                .or_else(|| self.obj.resolve_type_by_id(id)),
             None => self.obj.resolve_type_by_id(id),
         }
     }
 
     /// Find a list of BTF types using their name as a key.
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
-        let mut types = Vec::new();
+        let mut types = self.resolve_split_types_by_name(name)?;
 
         if let Some(base) = &self.base {
-            if let Ok(mut types_base) = base.resolve_types_by_name(name) {
-                types.append(&mut types_base);
-            }
-        }
-        if let Ok(mut types_obj) = self.resolve_split_types_by_name(name) {
-            types.append(&mut types_obj);
+            types.append(&mut base.resolve_types_by_name(name)?);
         }
 
-        if types.is_empty() {
-            // Keep "id" and not "type" below to be consitent with
-            // BtfObj::resolve_types_by_name.
-            bail!("No id linked to name {name}");
-        }
         Ok(types)
     }
 
@@ -130,6 +131,25 @@ impl Btf {
     /// definition only. For internal use only.
     pub(crate) fn resolve_split_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         self.obj.resolve_types_by_name(name)
+    }
+
+    /// Find a list of BTF types using a regex describing their name as a key.
+    #[cfg(feature = "regex")]
+    pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+        let mut types = self.resolve_split_types_by_regex(re)?;
+
+        if let Some(base) = &self.base {
+            types.append(&mut base.resolve_types_by_regex(re)?);
+        }
+
+        Ok(types)
+    }
+
+    /// Find a list of BTF types using a regex describing their name as a key,
+    /// using the split BTF definition only. For internal use only.
+    #[cfg(feature = "regex")]
+    pub fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+        self.obj.resolve_types_by_regex(re)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
@@ -147,17 +167,18 @@ impl Btf {
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
     pub fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
-        self.resolve_type_by_id(r#type.get_type_id()?)
+        let id = r#type.get_type_id()?;
+        self.resolve_type_by_id(id)
+            .ok_or_else(|| anyhow!("BTF is corrupted: type has invalid id ({id})"))
     }
 
     /// This helper returns an iterator that allow to resolve a Type
     /// referenced in another one all the way down to the chain.
     /// The helper makes use of `Btf::resolve_chained_type()`.
     pub fn type_iter<'a, T: BtfType + ?Sized>(&'a self, r#type: &'a T) -> TypeIter {
-        let ty = self.resolve_chained_type(r#type).ok();
         TypeIter {
             btf: self,
-            r#type: ty,
+            r#type: self.resolve_chained_type(r#type).ok(),
         }
     }
 }
