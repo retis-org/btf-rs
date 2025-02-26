@@ -175,7 +175,7 @@ impl Btf {
     /// This helper returns an iterator that allow to resolve a Type
     /// referenced in another one all the way down to the chain.
     /// The helper makes use of `Btf::resolve_chained_type()`.
-    pub fn type_iter<'a, T: BtfType + ?Sized>(&'a self, r#type: &'a T) -> TypeIter {
+    pub fn type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> TypeIter {
         TypeIter {
             btf: self,
             r#type: self.resolve_chained_type(r#type).ok(),
@@ -190,7 +190,7 @@ pub struct TypeIter<'a> {
 }
 
 /// Iterator for `Btf::TypeIter`.
-impl<'a> Iterator for TypeIter<'a> {
+impl Iterator for TypeIter<'_> {
     type Item = Type;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -932,7 +932,7 @@ impl Enum64Member {
     }
 
     pub fn val(&self) -> u64 {
-        (self.btf_enum64.val_hi32 as u64) << 32 | self.btf_enum64.val_lo32 as u64
+        ((self.btf_enum64.val_hi32 as u64) << 32) | self.btf_enum64.val_lo32 as u64
     }
 }
 
