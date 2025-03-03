@@ -7,10 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, Result};
-
-use crate::btf::*;
-use crate::cbtf;
+use crate::{btf::*, cbtf, Error, Result};
 
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names and maintains a symbol to type map for
@@ -42,7 +39,10 @@ impl BtfObj {
         // checks.
         let (header, endianness) = cbtf::btf_header::from_reader(reader)?;
         if header.version != 1 {
-            bail!("Unsupported BTF version: {}", header.version);
+            return Err(Error::Format(format!(
+                "Unsupported BTF version: {}",
+                header.version
+            )));
         }
 
         // Cache the str section for later use (name resolution).
@@ -63,8 +63,9 @@ impl BtfObj {
             let bytes = reader.read_until(b'\0', &mut raw)? as u32;
 
             let s = CStr::from_bytes_with_nul(&raw)
-                .map_err(|e| anyhow!("Could not parse string: {}", e))?
-                .to_str()?;
+                .map_err(|e| Error::Format(format!("Could not parse string: {}", e)))?
+                .to_str()
+                .map_err(|e| Error::Format(format!("Invalid UTF-8 string: {}", e)))?;
             str_cache.insert(start_str_off + offset, String::from(s));
 
             offset += bytes;
@@ -113,7 +114,7 @@ impl BtfObj {
                     19 => Type::Enum64(Enum64::from_reader(reader, &endianness, bt)?),
                     // We can't ignore unsupported types as we can't guess their
                     // size and thus how much to skip to the next type.
-                    x => bail!("Unsupported BTF type '{}'", x),
+                    x => return Err(Error::Format(format!("Unsupported BTF type ({x})"))),
                 },
             );
 
@@ -130,11 +131,7 @@ impl BtfObj {
                         Some(entry) => entry.push(id),
                         None => _ = strings.insert(name.clone(), vec![id]),
                     },
-                    None => bail!(
-                        "Couldn't get string at offset {} defined in kind {}",
-                        name_off,
-                        bt.kind()
-                    ),
+                    None => return Err(Error::InvalidString(name_off)),
                 }
             }
 
@@ -143,7 +140,7 @@ impl BtfObj {
 
         // Sanity check
         if reader.stream_position()? != end_type_section {
-            bail!("Invalid type section");
+            return Err(Error::Format("Invalid type section".to_string()));
         }
 
         Ok(BtfObj {
@@ -184,9 +181,10 @@ impl BtfObj {
         self.resolve_ids_by_name(name)
             .iter()
             .try_for_each(|id| -> Result<()> {
-                types.push(self.resolve_type_by_id(*id).ok_or_else(|| {
-                    anyhow!("BTF is corrupted: name ({name}) points to invalid type id ({id})")
-                })?);
+                types.push(
+                    self.resolve_type_by_id(*id)
+                        .ok_or(Error::InvalidType(*id))?,
+                );
                 Ok(())
             })?;
         Ok(types)
@@ -199,9 +197,10 @@ impl BtfObj {
         self.resolve_ids_by_regex(re)
             .iter()
             .try_for_each(|id| -> Result<()> {
-                types.push(self.resolve_type_by_id(*id).ok_or_else(|| {
-                    anyhow!("BTF is corrupted: regex ({re}) points to invalid type id ({id})")
-                })?);
+                types.push(
+                    self.resolve_type_by_id(*id)
+                        .ok_or(Error::InvalidType(*id))?,
+                );
                 Ok(())
             })?;
         Ok(types)
@@ -214,7 +213,7 @@ impl BtfObj {
         self.str_cache
             .get(&offset)
             .cloned()
-            .ok_or_else(|| anyhow!("BTF is corrupted: no string at offset {offset}"))
+            .ok_or(Error::InvalidString(offset))
     }
 
     /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
@@ -222,7 +221,6 @@ impl BtfObj {
     /// to traverse the Type tree.
     pub(super) fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
         let id = r#type.get_type_id()?;
-        self.resolve_type_by_id(id)
-            .ok_or_else(|| anyhow!("BTF is corrupted: type has invalid id ({id})"))
+        self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
     }
 }

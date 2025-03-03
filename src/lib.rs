@@ -109,6 +109,7 @@
 //!   integration tests.
 
 pub mod btf;
+pub mod error;
 pub mod utils;
 
 mod cbtf;
@@ -116,3 +117,4 @@ mod obj;
 
 #[doc(inline)]
 pub use btf::*;
+pub use error::*;

@@ -26,9 +26,7 @@
 //! [`BtfCollection::resolve_types_by_name`].
 use std::{fs, ops::Deref, path::Path};
 
-use anyhow::{bail, Result};
-
-use crate::{Btf, Type};
+use crate::{Btf, Error, Result, Type};
 
 /// BtfCollection provides a full system BTF view, by combining a base BTF
 /// information with multiple split BTFs.
@@ -93,7 +91,9 @@ impl BtfCollection {
         let name = Self::file_name(path.as_ref())?;
 
         if self.split.iter().any(|m| m.name == name) {
-            bail!("Split BTF with name {name} already present");
+            return Err(Error::Format(format!(
+                "Split BTF with name {name} already present"
+            )));
         }
 
         self.split.push(NamedBtf {
@@ -107,7 +107,9 @@ impl BtfCollection {
     pub fn add_split_btf_from_bytes(&mut self, name: &str, bytes: &[u8]) -> Result<&mut Self> {
         let name = name.to_string();
         if self.split.iter().any(|m| m.name == name) {
-            bail!("Split BTF with name {name} already present");
+            return Err(Error::Format(format!(
+                "Split BTF with name {name} already present"
+            )));
         }
 
         self.split.push(NamedBtf {
@@ -137,7 +139,7 @@ impl BtfCollection {
                         }
                     }
                 }
-                Err(e) => bail!("Error reading file from {}: {e}", dir.as_ref().display()),
+                Err(e) => return Err(Error::IO(e)),
             }
         }
 
@@ -260,9 +262,14 @@ impl BtfCollection {
         Ok(match path.file_name() {
             Some(name) => match name.to_str() {
                 Some(s) => s.to_string(),
-                None => bail!("Invalid file name {:?}", name),
+                None => return Err(Error::Format(format!("Invalid file name {:?}", name))),
             },
-            None => bail!("Could not get file name from path {}", path.display()),
+            None => {
+                return Err(Error::Format(format!(
+                    "Could not get file name from path {}",
+                    path.display()
+                )))
+            }
         })
     }
 }
