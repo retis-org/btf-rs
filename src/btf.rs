@@ -8,10 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, Result};
-
-use crate::cbtf;
-use crate::obj::BtfObj;
+use crate::{cbtf, obj::BtfObj, Error, Result};
 
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names.
@@ -38,7 +35,10 @@ impl Btf {
     /// use. A base Btf object must be provided.
     pub fn from_split_file<P: AsRef<Path>>(path: P, base: &Btf) -> Result<Btf> {
         if !path.as_ref().is_file() {
-            bail!("Invalid BTF file {}", path.as_ref().display());
+            return Err(Error::Format(format!(
+                "Invalid BTF file {}",
+                path.as_ref().display()
+            )));
         }
 
         Ok(Btf {
@@ -168,8 +168,7 @@ impl Btf {
     /// to traverse the Type tree.
     pub fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
         let id = r#type.get_type_id()?;
-        self.resolve_type_by_id(id)
-            .ok_or_else(|| anyhow!("BTF is corrupted: type has invalid id ({id})"))
+        self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
     }
 
     /// This helper returns an iterator that allow to resolve a Type
@@ -288,11 +287,11 @@ impl Type {
 
 pub trait BtfType {
     fn get_name_offset(&self) -> Result<u32> {
-        bail!("No name offset in type");
+        Err(Error::OpNotSupp("No name offset in type".to_string()))
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        bail!("No type offset in type");
+        Err(Error::OpNotSupp("No type offset in type".to_string()))
     }
 }
 
