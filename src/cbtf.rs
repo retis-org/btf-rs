@@ -7,8 +7,9 @@
 
 use std::io::Read;
 
-use anyhow::{bail, Result};
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
+
+use crate::{Error, Result};
 
 pub(super) enum Endianness {
     Little,
@@ -16,21 +17,21 @@ pub(super) enum Endianness {
 }
 
 impl Endianness {
-    fn u16_from_reader<R: Read>(&self, reader: &mut R) -> Result<u16, std::io::Error> {
+    fn u16_from_reader<R: Read>(&self, reader: &mut R) -> std::result::Result<u16, std::io::Error> {
         match &self {
             Endianness::Little => reader.read_u16::<LittleEndian>(),
             Endianness::Big => reader.read_u16::<BigEndian>(),
         }
     }
 
-    fn u32_from_reader<R: Read>(&self, reader: &mut R) -> Result<u32, std::io::Error> {
+    fn u32_from_reader<R: Read>(&self, reader: &mut R) -> std::result::Result<u32, std::io::Error> {
         match &self {
             Endianness::Little => reader.read_u32::<LittleEndian>(),
             Endianness::Big => reader.read_u32::<BigEndian>(),
         }
     }
 
-    fn i32_from_reader<R: Read>(&self, reader: &mut R) -> Result<i32, std::io::Error> {
+    fn i32_from_reader<R: Read>(&self, reader: &mut R) -> std::result::Result<i32, std::io::Error> {
         match &self {
             Endianness::Little => reader.read_i32::<LittleEndian>(),
             Endianness::Big => reader.read_i32::<BigEndian>(),
@@ -58,7 +59,7 @@ impl btf_header {
         let endianness = match magic {
             0xeB9F => Endianness::Little,
             0x9FeB => Endianness::Big,
-            magic => bail!("Invalid BTF magic: {:#x}", magic),
+            magic => return Err(Error::Format(format!("Invalid BTF magic: {:#x}", magic))),
         };
 
         Ok((

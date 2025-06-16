@@ -8,10 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, Result};
-
-use crate::cbtf;
-use crate::obj::BtfObj;
+use crate::{cbtf, obj::BtfObj, Error, Result};
 
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names.
@@ -38,7 +35,10 @@ impl Btf {
     /// use. A base Btf object must be provided.
     pub fn from_split_file<P: AsRef<Path>>(path: P, base: &Btf) -> Result<Btf> {
         if !path.as_ref().is_file() {
-            bail!("Invalid BTF file {}", path.as_ref().display());
+            return Err(Error::Format(format!(
+                "Invalid BTF file {}",
+                path.as_ref().display()
+            )));
         }
 
         Ok(Btf {
@@ -168,14 +168,13 @@ impl Btf {
     /// to traverse the Type tree.
     pub fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
         let id = r#type.get_type_id()?;
-        self.resolve_type_by_id(id)
-            .ok_or_else(|| anyhow!("BTF is corrupted: type has invalid id ({id})"))
+        self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
     }
 
     /// This helper returns an iterator that allow to resolve a Type
     /// referenced in another one all the way down to the chain.
     /// The helper makes use of `Btf::resolve_chained_type()`.
-    pub fn type_iter<'a, T: BtfType + ?Sized>(&'a self, r#type: &'a T) -> TypeIter {
+    pub fn type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> TypeIter {
         TypeIter {
             btf: self,
             r#type: self.resolve_chained_type(r#type).ok(),
@@ -190,7 +189,7 @@ pub struct TypeIter<'a> {
 }
 
 /// Iterator for `Btf::TypeIter`.
-impl<'a> Iterator for TypeIter<'a> {
+impl Iterator for TypeIter<'_> {
     type Item = Type;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -288,11 +287,11 @@ impl Type {
 
 pub trait BtfType {
     fn get_name_offset(&self) -> Result<u32> {
-        bail!("No name offset in type");
+        Err(Error::OpNotSupp("No name offset in type".to_string()))
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        bail!("No type offset in type");
+        Err(Error::OpNotSupp("No type offset in type".to_string()))
     }
 }
 
@@ -932,7 +931,7 @@ impl Enum64Member {
     }
 
     pub fn val(&self) -> u64 {
-        (self.btf_enum64.val_hi32 as u64) << 32 | self.btf_enum64.val_lo32 as u64
+        ((self.btf_enum64.val_hi32 as u64) << 32) | self.btf_enum64.val_lo32 as u64
     }
 }
 
