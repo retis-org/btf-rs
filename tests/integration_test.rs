@@ -5,38 +5,42 @@ use test_case::test_case;
 use btf_rs::*;
 
 fn bytes() -> Btf {
-    Btf::from_bytes(&read("tests/data/btf/vmlinux").unwrap()).unwrap()
+    Btf::from_bytes(&read("tests/assets/btf/vmlinux").unwrap()).unwrap()
 }
 
 fn file() -> Btf {
-    Btf::from_file("tests/data/btf/vmlinux").unwrap()
+    Btf::from_file("tests/assets/btf/vmlinux").unwrap()
 }
 
 #[cfg(feature = "elf")]
 fn elf() -> Btf {
-    Btf::from_bytes(&utils::elf::extract_btf_from_file("tests/data/linux_build/vmlinux").unwrap())
-        .unwrap()
+    Btf::from_bytes(
+        &utils::elf::extract_btf_from_file("tests/assets/elf/uncompressed/vmlinux").unwrap(),
+    )
+    .unwrap()
 }
 
 fn split_file() -> Btf {
-    let vmlinux = Btf::from_file("tests/data/btf/vmlinux").unwrap();
-    Btf::from_split_file("tests/data/btf/openvswitch", &vmlinux).unwrap()
+    let vmlinux = Btf::from_file("tests/assets/btf/vmlinux").unwrap();
+    Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
 }
 
 fn split_bytes() -> Btf {
-    let vmlinux = Btf::from_bytes(&read("tests/data/btf/vmlinux").unwrap()).unwrap();
-    Btf::from_split_bytes(&read("tests/data/btf/openvswitch").unwrap(), &vmlinux).unwrap()
+    let vmlinux = Btf::from_bytes(&read("tests/assets/btf/vmlinux").unwrap()).unwrap();
+    Btf::from_split_bytes(&read("tests/assets/btf/openvswitch").unwrap(), &vmlinux).unwrap()
 }
 
 #[cfg(feature = "elf")]
 fn split_elf() -> Btf {
     let vmlinux = Btf::from_bytes(
-        &utils::elf::extract_btf_from_file("tests/data/linux_build/vmlinux").unwrap(),
+        &utils::elf::extract_btf_from_file("tests/assets/elf/uncompressed/vmlinux").unwrap(),
     )
     .unwrap();
     Btf::from_split_bytes(
-        &utils::elf::extract_btf_from_file("tests/data/linux_build/net/openvswitch/openvswitch.ko")
-            .unwrap(),
+        &utils::elf::extract_btf_from_file(
+            "tests/assets/elf/uncompressed/kernel/net/openvswitch/openvswitch.ko",
+        )
+        .unwrap(),
         &vmlinux,
     )
     .unwrap()
@@ -50,13 +54,13 @@ fn split_elf() -> Btf {
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_ids_by_name(btf: Btf) {
     // Resolve primitive type.
-    assert_eq!(btf.resolve_ids_by_name("int").pop().unwrap(), 11);
+    assert_eq!(btf.resolve_ids_by_name("int").pop().unwrap(), 21);
     // Resolve typedef.
-    assert_eq!(btf.resolve_ids_by_name("u64").pop().unwrap(), 58);
+    assert_eq!(btf.resolve_ids_by_name("u64").pop().unwrap(), 36);
     // Resolve struct.
-    assert_eq!(btf.resolve_ids_by_name("sk_buff").pop().unwrap(), 4984);
+    assert_eq!(btf.resolve_ids_by_name("sk_buff").pop().unwrap(), 1768);
     // Resolve function.
-    assert_eq!(btf.resolve_ids_by_name("consume_skb").pop().unwrap(), 95474);
+    assert_eq!(btf.resolve_ids_by_name("kfree_skb").pop().unwrap(), 26250);
 }
 
 #[test_case(bytes())]
@@ -67,12 +71,12 @@ fn resolve_ids_by_name(btf: Btf) {
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn iter_types(btf: Btf) {
     // Iterate without looping ensuring non BtfTypes return None.
-    let vmalloc = match btf.resolve_types_by_name("vmalloc").unwrap().pop().unwrap() {
-        Type::Func(vmalloc) => vmalloc,
+    let kfree = match btf.resolve_types_by_name("kfree").unwrap().pop().unwrap() {
+        Type::Func(kfree) => kfree,
         _ => panic!("Resolved type is not a function"),
     };
 
-    let mut iter = btf.type_iter(&vmalloc);
+    let mut iter = btf.type_iter(&kfree);
     assert!(iter.next().is_some());
     assert!(iter.next().is_none());
 
@@ -106,7 +110,7 @@ fn iter_types(btf: Btf) {
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn resolve_types_by_name(btf: Btf) {
-    let types = btf.resolve_types_by_name("consume_skb").unwrap();
+    let types = btf.resolve_types_by_name("kfree").unwrap();
     assert_eq!(types.len(), 1);
 }
 
@@ -145,20 +149,20 @@ fn check_resolved_type(btf: Btf) {
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 fn bijection(btf: Btf) {
-    let func = match btf.resolve_types_by_name("vmalloc").unwrap().pop().unwrap() {
+    let func = match btf.resolve_types_by_name("kfree").unwrap().pop().unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
-    assert_eq!(btf.resolve_name(&func).unwrap(), "vmalloc");
+    assert_eq!(btf.resolve_name(&func).unwrap(), "kfree");
 
-    let func_id = btf.resolve_ids_by_name("vmalloc").pop().unwrap();
+    let func_id = btf.resolve_ids_by_name("kfree").pop().unwrap();
     let func = match btf.resolve_type_by_id(func_id).unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
-    assert_eq!(btf.resolve_name(&func).unwrap(), "vmalloc");
+    assert_eq!(btf.resolve_name(&func).unwrap(), "kfree");
 }
 
 #[test_case(bytes())]
@@ -214,12 +218,12 @@ fn resolve_function(btf: Btf) {
     };
 
     assert_eq!(btf.resolve_name(&r#struct).unwrap(), "sk_buff");
-    assert_eq!(r#struct.size(), 232);
-    assert_eq!(r#struct.members.len(), 28);
+    assert_eq!(r#struct.size(), 176);
+    assert_eq!(r#struct.members.len(), 25);
 
-    assert_eq!(btf.resolve_name(&r#struct.members[25]).unwrap(), "truesize");
+    assert_eq!(btf.resolve_name(&r#struct.members[23]).unwrap(), "truesize");
 
-    let arg = match btf.resolve_chained_type(&r#struct.members[25]).unwrap() {
+    let arg = match btf.resolve_chained_type(&r#struct.members[23]).unwrap() {
         Type::Int(int) => int,
         _ => panic!("Resolved type is not an integer"),
     };
@@ -314,33 +318,24 @@ fn resolve_split_func(btf: Btf) {
         _ => panic!("Resolved type is not int"),
     }
 
-    let ptr0 = match btf.resolve_chained_type(&proto.parameters[0]).unwrap() {
-        Type::Ptr(ptr) => ptr,
-        _ => panic!("Resolved type is not a pointer"),
-    };
+    assert!(matches!(
+        btf.resolve_chained_type(&proto.parameters[0]).unwrap(),
+        Type::Ptr(_)
+    ));
 
     let ptr1 = match btf.resolve_chained_type(&proto.parameters[1]).unwrap() {
         Type::Ptr(ptr) => ptr,
         _ => panic!("Resolved type is not a pointer"),
     };
 
-    let struct0 = match btf.resolve_chained_type(&ptr0).unwrap() {
+    let r#struct = match btf.resolve_chained_type(&ptr1).unwrap() {
         Type::Struct(r#struct) => r#struct,
         _ => panic!("Resolved type is not a struct"),
     };
 
-    let struct1 = match btf.resolve_chained_type(&ptr1).unwrap() {
-        Type::Struct(r#struct) => r#struct,
-        _ => panic!("Resolved type is not a struct"),
-    };
-
-    assert_eq!(btf.resolve_name(&struct0).unwrap(), "datapath");
-    assert_eq!(struct0.size(), 136);
-    assert_eq!(struct0.members.len(), 10);
-
-    assert_eq!(btf.resolve_name(&struct1).unwrap(), "sk_buff");
-    assert_eq!(struct1.size(), 232);
-    assert_eq!(struct1.members.len(), 28);
+    assert_eq!(btf.resolve_name(&r#struct).unwrap(), "sk_buff");
+    assert_eq!(r#struct.size(), 176);
+    assert_eq!(r#struct.members.len(), 25);
 }
 
 #[test_case(split_file())]
@@ -352,16 +347,20 @@ fn resolve_regex(btf: Btf) {
 
     // Look for drop reason enums:
     // - skb_drop_reason
-    // - mac80211_drop_reason
     // - ovs_drop_reason
     let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
     let ids = btf.resolve_ids_by_regex(&re);
-    assert_eq!(ids.len(), 3);
+    assert!(ids.len() >= 2);
 
-    let types = btf.resolve_types_by_regex(&re).unwrap();
-    assert_eq!(types.len(), 3);
+    let types = btf
+        .resolve_types_by_regex(&re)
+        .unwrap()
+        .into_iter()
+        .filter(|t| matches!(t, Type::Enum(_)))
+        .collect::<Vec<_>>();
+    assert_eq!(types.len(), 2);
 
-    let mut reasons = HashSet::from(["ovs_drop_reason", "mac80211_drop_reason", "skb_drop_reason"]);
+    let mut reasons = HashSet::from(["ovs_drop_reason", "skb_drop_reason"]);
     let get_enum_name = |r#type: &Type| {
         let r#enum = match r#type {
             Type::Enum(r#enum) => r#enum,
@@ -376,8 +375,8 @@ fn resolve_regex(btf: Btf) {
 }
 
 fn btfc_files() -> utils::collection::BtfCollection {
-    let mut btfc = utils::collection::BtfCollection::from_file("tests/data/btf/vmlinux").unwrap();
-    btfc.add_split_btf_from_file("tests/data/btf/openvswitch")
+    let mut btfc = utils::collection::BtfCollection::from_file("tests/assets/btf/vmlinux").unwrap();
+    btfc.add_split_btf_from_file("tests/assets/btf/openvswitch")
         .unwrap();
     btfc
 }
@@ -385,21 +384,24 @@ fn btfc_files() -> utils::collection::BtfCollection {
 fn btfc_bytes() -> utils::collection::BtfCollection {
     let mut btfc = utils::collection::BtfCollection::from_bytes(
         "vmlinux",
-        &read("tests/data/btf/vmlinux").unwrap(),
+        &read("tests/assets/btf/vmlinux").unwrap(),
     )
     .unwrap();
-    btfc.add_split_btf_from_bytes("openvswitch", &read("tests/data/btf/openvswitch").unwrap())
-        .unwrap();
+    btfc.add_split_btf_from_bytes(
+        "openvswitch",
+        &read("tests/assets/btf/openvswitch").unwrap(),
+    )
+    .unwrap();
     btfc
 }
 
 fn btfc_dir() -> utils::collection::BtfCollection {
-    utils::collection::BtfCollection::from_dir("tests/data/btf", "vmlinux").unwrap()
+    utils::collection::BtfCollection::from_dir("tests/assets/btf", "vmlinux").unwrap()
 }
 
 #[cfg(feature = "elf")]
 fn btfc_elf() -> utils::collection::BtfCollection {
-    utils::elf::collection_from_kernel_dir("tests/data/linux_build").unwrap()
+    utils::elf::collection_from_kernel_dir("tests/assets/elf/uncompressed").unwrap()
 }
 
 #[test_case(btfc_files())]
@@ -408,21 +410,21 @@ fn btfc_elf() -> utils::collection::BtfCollection {
 #[cfg_attr(feature = "elf", test_case(btfc_elf()))]
 fn btfc(btfc: utils::collection::BtfCollection) {
     // Resolve a function from vmlinux.
-    let mut types = btfc.resolve_types_by_name("vmalloc").unwrap();
+    let mut types = btfc.resolve_types_by_name("kfree").unwrap();
     let (nbtf, func) = match types.pop().unwrap() {
         (nbtf, Type::Func(func)) => (nbtf, func),
         _ => panic!("Resolved type is not a function"),
     };
 
-    assert_eq!(nbtf.resolve_name(&func).unwrap(), "vmalloc");
+    assert_eq!(nbtf.resolve_name(&func).unwrap(), "kfree");
 
-    let (nbtf, func_id) = btfc.resolve_ids_by_name("vmalloc").pop().unwrap();
+    let (nbtf, func_id) = btfc.resolve_ids_by_name("kfree").pop().unwrap();
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
-    assert_eq!(nbtf.resolve_name(&func).unwrap(), "vmalloc");
+    assert_eq!(nbtf.resolve_name(&func).unwrap(), "kfree");
 
     // Resolve a function from the openvswitch module.
     let mut types = btfc
@@ -468,22 +470,28 @@ fn btfc_resolve_regex(btfc: utils::collection::BtfCollection) {
 
     // Look for drop reason enums:
     // - skb_drop_reason
-    // - mac80211_drop_reason
     // - ovs_drop_reason
     let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
     let ids = btfc.resolve_ids_by_regex(&re);
-    assert_eq!(ids.len(), 3);
+    assert!(ids.len() >= 2);
 
-    let types = btfc.resolve_types_by_regex(&re).unwrap();
-    assert_eq!(types.len(), 3);
+    let types = btfc
+        .resolve_types_by_regex(&re)
+        .unwrap()
+        .into_iter()
+        .filter(|(_, t)| matches!(t, Type::Enum(_)))
+        .collect::<Vec<_>>();
+    assert_eq!(types.len(), 2);
 
-    let mut reasons = HashSet::from(["ovs_drop_reason", "mac80211_drop_reason", "skb_drop_reason"]);
+    let mut reasons = HashSet::from(["ovs_drop_reason", "skb_drop_reason"]);
     let get_enum_name = |r#type: &(&utils::collection::NamedBtf, btf_rs::Type)| {
         let (nbtf, r#enum) = match r#type {
             (nbtf, Type::Enum(r#enum)) => (nbtf, r#enum),
             _ => panic!("Type is not an enum"),
         };
-        nbtf.resolve_name(r#enum).unwrap()
+        let name = nbtf.resolve_name(r#enum).unwrap();
+        println!("{name}");
+        name
     };
     types.iter().for_each(|t| {
         assert!(reasons.remove(get_enum_name(t).as_str()));
