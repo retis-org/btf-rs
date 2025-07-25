@@ -21,7 +21,7 @@ test_task:
     - cargo build --verbose -F elf-compression
     - cargo build --verbose -F elf-compression,regex
   test_script:
-    - cargo test --verbose -F elf,regex
+    - cargo test --verbose -F elf,elf-compression,regex
   check_script:
     - cargo fmt --check
     - cargo clippy -F elf,elf-compression,regex -- -D warnings

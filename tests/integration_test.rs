@@ -20,6 +20,14 @@ fn elf() -> Btf {
     .unwrap()
 }
 
+#[cfg(feature = "elf-compression")]
+fn compressed_elf(alg: &str) -> Btf {
+    Btf::from_bytes(
+        &utils::elf::extract_btf_from_file(format!("tests/assets/elf/{alg}/vmlinux")).unwrap(),
+    )
+    .unwrap()
+}
+
 fn split_file() -> Btf {
     let vmlinux = Btf::from_file("tests/assets/btf/vmlinux").unwrap();
     Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
@@ -46,12 +54,48 @@ fn split_elf() -> Btf {
     .unwrap()
 }
 
+#[cfg(feature = "elf-compression")]
+fn split_compressed_elf(alg: &str, ext: &str) -> Btf {
+    let vmlinux = Btf::from_bytes(
+        &utils::elf::extract_btf_from_file(format!("tests/assets/elf/{alg}/vmlinux")).unwrap(),
+    )
+    .unwrap();
+    Btf::from_split_bytes(
+        &utils::elf::extract_btf_from_file(format!(
+            "tests/assets/elf/{alg}/kernel/net/openvswitch/openvswitch.ko.{ext}"
+        ))
+        .unwrap(),
+        &vmlinux,
+    )
+    .unwrap()
+}
+
 #[test_case(bytes())]
 #[test_case(file())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn resolve_ids_by_name(btf: Btf) {
     // Resolve primitive type.
     assert_eq!(btf.resolve_ids_by_name("int").pop().unwrap(), 21);
@@ -66,9 +110,29 @@ fn resolve_ids_by_name(btf: Btf) {
 #[test_case(bytes())]
 #[test_case(file())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn iter_types(btf: Btf) {
     // Iterate without looping ensuring non BtfTypes return None.
     let kfree = match btf.resolve_types_by_name("kfree").unwrap().pop().unwrap() {
@@ -106,9 +170,29 @@ fn iter_types(btf: Btf) {
 #[test_case(bytes())]
 #[test_case(file())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn resolve_types_by_name(btf: Btf) {
     let types = btf.resolve_types_by_name("kfree").unwrap();
     assert_eq!(types.len(), 1);
@@ -117,9 +201,29 @@ fn resolve_types_by_name(btf: Btf) {
 #[test_case(bytes())]
 #[test_case(file())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn resolve_types_by_name_unknown(btf: Btf) {
     assert!(btf
         .resolve_types_by_name("not_a_known_function")
@@ -130,9 +234,29 @@ fn resolve_types_by_name_unknown(btf: Btf) {
 #[test_case(bytes())]
 #[test_case(file())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn check_resolved_type(btf: Btf) {
     let mut r#type = btf.resolve_types_by_name("sk_buff").unwrap();
 
@@ -145,9 +269,29 @@ fn check_resolved_type(btf: Btf) {
 #[test_case(bytes())]
 #[test_case(file())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn bijection(btf: Btf) {
     let func = match btf.resolve_types_by_name("kfree").unwrap().pop().unwrap() {
         Type::Func(func) => func,
@@ -168,9 +312,29 @@ fn bijection(btf: Btf) {
 #[test_case(bytes())]
 #[test_case(file())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn resolve_function(btf: Btf) {
     let func = match btf
         .resolve_types_by_name("kfree_skb_reason")
@@ -242,6 +406,22 @@ fn wrong_file() {
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn resolve_split_struct(btf: Btf) {
     let r#struct = btf
         .resolve_types_by_name("datapath")
@@ -281,6 +461,22 @@ fn resolve_split_struct(btf: Btf) {
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn resolve_split_func(btf: Btf) {
     // Resolve the following function:
     // static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
@@ -341,6 +537,22 @@ fn resolve_split_func(btf: Btf) {
 #[test_case(split_file())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 #[cfg(feature = "regex")]
 fn resolve_regex(btf: Btf) {
     use std::collections::HashSet;
@@ -404,10 +616,28 @@ fn btfc_elf() -> utils::collection::BtfCollection {
     utils::elf::collection_from_kernel_dir("tests/assets/elf/uncompressed").unwrap()
 }
 
+#[cfg(feature = "elf-compression")]
+fn btfc_compressed_elf(alg: &str) -> utils::collection::BtfCollection {
+    utils::elf::collection_from_kernel_dir(format!("tests/assets/elf/{alg}")).unwrap()
+}
+
 #[test_case(btfc_files())]
 #[test_case(btfc_bytes())]
 #[test_case(btfc_dir())]
 #[cfg_attr(feature = "elf", test_case(btfc_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(btfc_compressed_elf("bzip2+xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(btfc_compressed_elf("gzip+gzip"))
+)]
+#[cfg_attr(feature = "elf-compression", test_case(btfc_compressed_elf("xz+xz")))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(btfc_compressed_elf("zstd+zstd"))
+)]
 fn btfc(btfc: utils::collection::BtfCollection) {
     // Resolve a function from vmlinux.
     let mut types = btfc.resolve_types_by_name("kfree").unwrap();
@@ -464,6 +694,19 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 #[test_case(btfc_bytes())]
 #[test_case(btfc_dir())]
 #[cfg_attr(feature = "elf", test_case(btfc_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(btfc_compressed_elf("bzip2+xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(btfc_compressed_elf("gzip+gzip"))
+)]
+#[cfg_attr(feature = "elf-compression", test_case(btfc_compressed_elf("xz+xz")))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(btfc_compressed_elf("zstd+zstd"))
+)]
 #[cfg(feature = "regex")]
 fn btfc_resolve_regex(btfc: utils::collection::BtfCollection) {
     use std::collections::HashSet;
