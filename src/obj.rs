@@ -63,9 +63,9 @@ impl BtfObj {
             let bytes = reader.read_until(b'\0', &mut raw)? as u32;
 
             let s = CStr::from_bytes_with_nul(&raw)
-                .map_err(|e| Error::Format(format!("Could not parse string: {}", e)))?
+                .map_err(|e| Error::Format(format!("Could not parse string: {e}")))?
                 .to_str()
-                .map_err(|e| Error::Format(format!("Invalid UTF-8 string: {}", e)))?;
+                .map_err(|e| Error::Format(format!("Invalid UTF-8 string: {e}")))?;
             str_cache.insert(start_str_off + offset, String::from(s));
 
             offset += bytes;

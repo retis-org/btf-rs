@@ -158,10 +158,7 @@ fn iter_types(btf: Btf) {
 
     let types: Vec<Type> = btf
         .type_iter(ml.unwrap())
-        .filter(|t| match t {
-            Type::Typedef(_) | Type::Int(_) => true,
-            _ => false,
-        })
+        .filter(|t| matches!(t, Type::Typedef(_) | Type::Int(_)))
         .collect::<Vec<_>>();
 
     assert_eq!(types.len(), 2);
