@@ -14,6 +14,7 @@ use crate::{btf::*, cbtf, Error, Result};
 /// symbol resolution.
 pub(super) struct BtfObj {
     endianness: cbtf::Endianness,
+    header: cbtf::btf_header,
     // Map from str offsets to the strings. For internal use (name resolution)
     // only.
     str_cache: HashMap<u32, String>,
@@ -24,9 +25,6 @@ pub(super) struct BtfObj {
     // retrieval by their id implicit as the id is incremental in the BTF file;
     // but that is really the goal here.
     types: HashMap<u32, Type>,
-    // Length of the string section. Used to calculate the next string offset
-    // of split BTFs.
-    str_len: u32,
 }
 
 impl BtfObj {
@@ -55,7 +53,7 @@ impl BtfObj {
         // For split BTFs both ids and string offsets are logically consecutive.
         let (mut id, start_str_off) = match base {
             None => (1, 0),
-            Some(ref base) => (base.types.len() as u32, base.str_len),
+            Some(ref base) => (base.types.len() as u32, base.header.str_len),
         };
 
         while offset < header.str_len {
@@ -122,10 +120,10 @@ impl BtfObj {
 
         Ok(BtfObj {
             endianness,
+            header,
             str_cache,
             strings,
             types,
-            str_len: header.str_len,
         })
     }
 
