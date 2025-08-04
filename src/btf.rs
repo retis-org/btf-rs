@@ -34,13 +34,6 @@ impl Btf {
     /// Parse a split BTF object file and construct a Rust representation for later
     /// use. A base Btf object must be provided.
     pub fn from_split_file<P: AsRef<Path>>(path: P, base: &Btf) -> Result<Btf> {
-        if !path.as_ref().is_file() {
-            return Err(Error::Format(format!(
-                "Invalid BTF file {}",
-                path.as_ref().display()
-            )));
-        }
-
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(
                 &mut BufReader::new(File::open(path)?),
