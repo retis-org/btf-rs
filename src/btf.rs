@@ -342,7 +342,7 @@ pub struct Int {
 }
 
 impl Int {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -383,7 +383,7 @@ pub struct Ptr {
 }
 
 impl Ptr {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Ptr {
+    fn new(btf_type: cbtf::btf_type) -> Ptr {
         Ptr { btf_type }
     }
 }
@@ -403,7 +403,7 @@ pub struct Array {
 
 #[allow(clippy::len_without_is_empty)]
 impl Array {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -433,7 +433,7 @@ pub struct Struct {
 }
 
 impl Struct {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -476,7 +476,7 @@ pub struct Member {
 }
 
 impl Member {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         kind_flag: u32,
@@ -521,7 +521,7 @@ pub struct Enum {
 
 #[allow(clippy::len_without_is_empty)]
 impl Enum {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -564,10 +564,7 @@ pub struct EnumMember {
 }
 
 impl EnumMember {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<EnumMember> {
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<EnumMember> {
         Ok(EnumMember {
             btf_enum: cbtf::btf_enum::from_reader(reader, endianness)?,
         })
@@ -591,7 +588,7 @@ pub struct Fwd {
 }
 
 impl Fwd {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Fwd {
+    fn new(btf_type: cbtf::btf_type) -> Fwd {
         Fwd { btf_type }
     }
 
@@ -619,7 +616,7 @@ pub struct Typedef {
 }
 
 impl Typedef {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Typedef {
+    fn new(btf_type: cbtf::btf_type) -> Typedef {
         Typedef { btf_type }
     }
 }
@@ -644,7 +641,7 @@ pub struct Volatile {
 }
 
 impl Volatile {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Volatile {
+    fn new(btf_type: cbtf::btf_type) -> Volatile {
         Volatile { btf_type }
     }
 }
@@ -668,7 +665,7 @@ pub struct Func {
 }
 
 impl Func {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Func {
+    fn new(btf_type: cbtf::btf_type) -> Func {
         Func { btf_type }
     }
 
@@ -703,7 +700,7 @@ pub struct FuncProto {
 }
 
 impl FuncProto {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -732,10 +729,7 @@ pub struct Parameter {
 }
 
 impl Parameter {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<Parameter> {
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<Parameter> {
         Ok(Parameter {
             btf_param: cbtf::btf_param::from_reader(reader, endianness)?,
         })
@@ -764,7 +758,7 @@ pub struct Var {
 }
 
 impl Var {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -802,7 +796,7 @@ pub struct Datasec {
 }
 
 impl Datasec {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -833,10 +827,7 @@ pub struct VarSecinfo {
 }
 
 impl VarSecinfo {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<VarSecinfo> {
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<VarSecinfo> {
         Ok(VarSecinfo {
             btf_var_secinfo: cbtf::btf_var_secinfo::from_reader(reader, endianness)?,
         })
@@ -864,7 +855,7 @@ pub struct Float {
 }
 
 impl Float {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Float {
+    fn new(btf_type: cbtf::btf_type) -> Float {
         Float { btf_type }
     }
 
@@ -887,7 +878,7 @@ pub struct DeclTag {
 }
 
 impl DeclTag {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -926,7 +917,7 @@ pub struct Enum64 {
 
 #[allow(clippy::len_without_is_empty)]
 impl Enum64 {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -969,10 +960,7 @@ pub struct Enum64Member {
 }
 
 impl Enum64Member {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<Enum64Member> {
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<Enum64Member> {
         Ok(Enum64Member {
             btf_enum64: cbtf::btf_enum64::from_reader(reader, endianness)?,
         })
