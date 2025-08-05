@@ -98,13 +98,37 @@ fn split_compressed_elf(alg: &str, ext: &str) -> Btf {
 )]
 fn resolve_ids_by_name(btf: Btf) {
     // Resolve primitive type.
-    assert_eq!(btf.resolve_ids_by_name("int").pop().unwrap(), 21);
+    assert_eq!(
+        btf.resolve_ids_by_name("int")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        21
+    );
     // Resolve typedef.
-    assert_eq!(btf.resolve_ids_by_name("u64").pop().unwrap(), 36);
+    assert_eq!(
+        btf.resolve_ids_by_name("u64")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        36
+    );
     // Resolve struct.
-    assert_eq!(btf.resolve_ids_by_name("sk_buff").pop().unwrap(), 1768);
+    assert_eq!(
+        btf.resolve_ids_by_name("sk_buff")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        1768
+    );
     // Resolve function.
-    assert_eq!(btf.resolve_ids_by_name("kfree_skb").pop().unwrap(), 26250);
+    assert_eq!(
+        btf.resolve_ids_by_name("kfree_skb")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        26250
+    );
 }
 
 #[test_case(bytes())]
@@ -338,16 +362,25 @@ fn check_resolved_type(btf: Btf) {
     test_case(split_compressed_elf("zstd+zstd", "zst"))
 )]
 fn bijection(btf: Btf) {
-    let func = match btf.resolve_types_by_name("kfree").unwrap().pop().unwrap() {
+    let func = match btf
+        .resolve_types_by_name("kfree")
+        .expect("resolve_types_by_name failed")
+        .pop()
+        .expect("resolve_types_by_name list is empty")
+    {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
     assert_eq!(btf.resolve_name(&func).unwrap(), "kfree");
 
-    let func_id = btf.resolve_ids_by_name("kfree").pop().unwrap();
+    let func_id = btf
+        .resolve_ids_by_name("kfree")
+        .expect("resolve_ids_by_name failed")
+        .pop()
+        .expect("resolve_ids_by_name list is empty");
     let func = match btf.resolve_type_by_id(func_id).unwrap() {
-        Type::Func(func) => func,
+        Some(Type::Func(func)) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
@@ -407,7 +440,7 @@ fn resolve_function(btf: Btf) {
     assert!(!proto.parameters[1].is_variadic());
 
     match btf.resolve_type_by_id(proto.return_type_id()).unwrap() {
-        Type::Void => (),
+        Some(Type::Void) => (),
         _ => panic!("Resolved type is not void"),
     }
 
@@ -555,7 +588,7 @@ fn resolve_split_func(btf: Btf) {
     assert!(!proto.parameters[1].is_variadic());
 
     match btf.resolve_type_by_id(proto.return_type_id()).unwrap() {
-        Type::Int(_) => (),
+        Some(Type::Int(_)) => (),
         _ => panic!("Resolved type is not int"),
     }
 
@@ -606,7 +639,7 @@ fn resolve_regex(btf: Btf) {
     // - skb_drop_reason
     // - ovs_drop_reason
     let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
-    let ids = btf.resolve_ids_by_regex(&re);
+    let ids = btf.resolve_ids_by_regex(&re).unwrap();
     assert!(ids.len() >= 2);
 
     let types = btf
@@ -693,9 +726,13 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 
     assert_eq!(nbtf.resolve_name(&func).unwrap(), "kfree");
 
-    let (nbtf, func_id) = btfc.resolve_ids_by_name("kfree").pop().unwrap();
+    let (nbtf, func_id) = btfc
+        .resolve_ids_by_name("kfree")
+        .expect("resolve_ids_by_name failed")
+        .pop()
+        .expect("resolve_ids_by_name list is empty");
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
-        Type::Func(func) => func,
+        Some(Type::Func(func)) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
@@ -714,10 +751,11 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 
     let (nbtf, func_id) = btfc
         .resolve_ids_by_name("queue_userspace_packet")
+        .expect("resolve_ids_by_name failed")
         .pop()
-        .unwrap();
+        .expect("resolve_ids_by_name list is empty");
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
-        Type::Func(func) => func,
+        Some(Type::Func(func)) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
@@ -760,7 +798,7 @@ fn btfc_resolve_regex(btfc: utils::collection::BtfCollection) {
     // - skb_drop_reason
     // - ovs_drop_reason
     let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
-    let ids = btfc.resolve_ids_by_regex(&re);
+    let ids = btfc.resolve_ids_by_regex(&re).unwrap();
     assert!(ids.len() >= 2);
 
     let types = btfc

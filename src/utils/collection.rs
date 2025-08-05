@@ -157,11 +157,11 @@ impl BtfCollection {
     /// tuples containing each a reference to `NamedBtf` (representing the BTF
     /// where a match was found) and the id. Further lookups must be done using
     /// the `Btf` object contained in the linked `NamedBtf` one.
-    pub fn resolve_ids_by_name(&self, name: &str) -> Vec<(&NamedBtf, u32)> {
+    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, u32)>> {
         let mut ids = self
             .base
             .btf
-            .resolve_ids_by_name(name)
+            .resolve_ids_by_name(name)?
             .drain(..)
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
@@ -169,12 +169,12 @@ impl BtfCollection {
         for split in self.split.iter() {
             split
                 .btf
-                .resolve_split_ids_by_name(name)
+                .resolve_split_ids_by_name(name)?
                 .drain(..)
                 .for_each(|i| ids.push((split, i)));
         }
 
-        ids
+        Ok(ids)
     }
 
     /// Find a list of BTF ids whose names match a regex.
@@ -185,11 +185,11 @@ impl BtfCollection {
     /// lookups must be done using the `Btf` object contained in the linked
     /// `NamedBtf` one.
     #[cfg(feature = "regex")]
-    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Vec<(&NamedBtf, u32)> {
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<(&NamedBtf, u32)>> {
         let mut ids = self
             .base
             .btf
-            .resolve_ids_by_regex(re)
+            .resolve_ids_by_regex(re)?
             .drain(..)
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
@@ -197,12 +197,12 @@ impl BtfCollection {
         for split in self.split.iter() {
             split
                 .btf
-                .resolve_split_ids_by_regex(re)
+                .resolve_split_ids_by_regex(re)?
                 .drain(..)
                 .for_each(|i| ids.push((split, i)));
         }
 
-        ids
+        Ok(ids)
     }
 
     /// Find a list of BTF types using their name as a key. Matching types can
