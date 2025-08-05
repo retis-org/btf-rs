@@ -64,49 +64,49 @@ impl Btf {
     }
 
     /// Find a list of BTF ids using their name as a key.
-    pub fn resolve_ids_by_name(&self, name: &str) -> Vec<u32> {
-        let mut ids = self.resolve_split_ids_by_name(name);
+    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        let mut ids = self.resolve_split_ids_by_name(name)?;
 
         if let Some(base) = &self.base {
             ids.append(&mut base.resolve_ids_by_name(name));
         }
 
-        ids
+        Ok(ids)
     }
 
     /// Find a list of BTF ids using their name as a key, using the split BTF
     /// definition only. For internal use only.
-    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Vec<u32> {
-        self.obj.resolve_ids_by_name(name)
+    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        Ok(self.obj.resolve_ids_by_name(name))
     }
 
     /// Find a list of BTF ids whose names match a regex.
     #[cfg(feature = "regex")]
-    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
-        let mut ids = self.resolve_split_ids_by_regex(re);
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        let mut ids = self.resolve_split_ids_by_regex(re)?;
 
         if let Some(base) = &self.base {
             ids.append(&mut base.resolve_ids_by_regex(re));
         }
 
-        ids
+        Ok(ids)
     }
 
     /// Find a list of BTF ids whose names match a regex, using the split BTF
     /// definition only. For internal use only.
     #[cfg(feature = "regex")]
-    pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
-        self.obj.resolve_ids_by_regex(re)
+    pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        Ok(self.obj.resolve_ids_by_regex(re))
     }
 
     /// Find a BTF type using its id as a key.
-    pub fn resolve_type_by_id(&self, id: u32) -> Option<Type> {
-        match &self.base {
+    pub fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
+        Ok(match &self.base {
             Some(base) => base
                 .resolve_type_by_id(id)
                 .or_else(|| self.obj.resolve_type_by_id(id)),
             None => self.obj.resolve_type_by_id(id),
-        }
+        })
     }
 
     /// Find a list of BTF types using their name as a key.
@@ -161,7 +161,7 @@ impl Btf {
     /// to traverse the Type tree.
     pub fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
         let id = r#type.get_type_id()?;
-        self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
+        self.resolve_type_by_id(id)?.ok_or(Error::InvalidType(id))
     }
 
     /// This helper returns an iterator that allow to resolve a Type
