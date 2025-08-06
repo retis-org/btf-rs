@@ -118,3 +118,8 @@ $ ./target/release/examples/benchmark -i 100 \
       --split /sys/kernel/btf/openvswitch \
       --id 77379 --name __kfree_skb --regex "^[[:alnum:]]+_drop_reason$"
 ```
+
+*Btf-rs* support different internal backends for storing the parsed BTF data.
+This can have an impact on performances and/or the memory footprint. The
+benchmark utility can be used to explicitly select a backend to help selecting
+the right one. See the `--backend` option.
