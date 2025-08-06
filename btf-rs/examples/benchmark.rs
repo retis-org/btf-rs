@@ -1,8 +1,8 @@
 use std::{path::PathBuf, time::Instant};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use btf_rs::*;
-use clap::Parser;
+use clap::{builder::PossibleValuesParser, Parser};
 
 #[cfg(feature = "regex")]
 use regex::Regex;
@@ -18,6 +18,15 @@ struct Args {
         help = "Number of iterations to run each test case"
     )]
     iterations: u32,
+    #[arg(
+        long,
+        default_value = "default",
+        value_parser=PossibleValuesParser::new([
+            "default", "cache", "mmap",
+        ]),
+        help = "Backend to use for storing parsed BTF data",
+    )]
+    backend: String,
     #[arg(
         long,
         default_value = "/sys/kernel/btf/vmlinux",
@@ -52,10 +61,27 @@ macro_rules! test {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    test!("Btf::from_file", args.iterations, {
-        let _ = Btf::from_file(&args.base)?;
-    });
-    let mut btf = Btf::from_file(&args.base)?;
+    let mut btf = match args.backend.as_str() {
+        "default" => {
+            test!("Btf::from_file", args.iterations, {
+                let _ = Btf::from_file(&args.base)?;
+            });
+            Btf::from_file(&args.base)?
+        }
+        "cache" => {
+            test!("Btf::cache_from_file", args.iterations, {
+                let _ = Btf::from_file_with_backend(&args.base, Backend::Cache)?;
+            });
+            Btf::from_file_with_backend(&args.base, Backend::Cache)?
+        }
+        "mmap" => {
+            test!("Btf::mmap_from_file", args.iterations, {
+                let _ = Btf::from_file_with_backend(&args.base, Backend::Mmap)?;
+            });
+            Btf::from_file_with_backend(&args.base, Backend::Mmap)?
+        }
+        x => bail!("Unknown backend {x}"),
+    };
 
     if let Some(split) = &args.split {
         test!("Btf::from_split_file", args.iterations, {
