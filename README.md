@@ -93,3 +93,28 @@ println!("{}", btf.resolve_name(&r#struct).unwrap());
 Other information such as function scope and return value, structure size and
 members, etc. can be retrieved. For all those see the `enum Type` and its
 associated structures documentation.
+
+## Benchmark
+
+A minimal benchmarking utility is provided as part of the [examples](examples/)
+which can be used to see how *btf-rs* would perform on a given system using
+specific BTF data.
+
+To compile it please use the `--release` flavor, as follow. Additional features
+can be enabled using `-F <features list>`.
+
+```
+$ cargo build --release --example benchmark
+$ cargo build -F regex --release --example benchmark
+$ ./target/release/examples/benchmark --help
+```
+
+A few parameters are required to configure the type id and name to use for
+querying the BTF data. Those can be selected by first inspecting the BTF data
+using `bpftool` (`bpftool btf dump file /sys/kernel/btf/vmlinux`).
+
+```
+$ ./target/release/examples/benchmark -i 100 \
+      --split /sys/kernel/btf/openvswitch \
+      --id 77379 --name __kfree_skb --regex "^[[:alnum:]]+_drop_reason$"
+```
