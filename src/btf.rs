@@ -141,7 +141,7 @@ impl Btf {
     /// Find a list of BTF types using a regex describing their name as a key,
     /// using the split BTF definition only. For internal use only.
     #[cfg(feature = "regex")]
-    pub fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+    pub(crate) fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         self.obj.resolve_types_by_regex(re)
     }
 
