@@ -70,6 +70,11 @@ fn split_compressed_elf(alg: &str, ext: &str) -> Btf {
     .unwrap()
 }
 
+#[test_case(split_file())]
+fn double_split(btf: Btf) {
+    assert!(Btf::from_split_file("tests/assets/btf/openvswitch", &btf).is_err());
+}
+
 #[test_case(bytes())]
 #[test_case(file())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
