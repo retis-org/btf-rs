@@ -128,12 +128,13 @@ impl CachedBtfObj {
                 header.version
             )));
         }
+        let (est_str, est_ty) = header.estimates();
 
         // Cache the str section for later use (name resolution).
         let offset = header.hdr_len + header.str_off;
         reader.seek(SeekFrom::Start(offset as u64))?;
 
-        let mut str_cache = HashMap::new();
+        let mut str_cache = HashMap::with_capacity(est_str);
         let mut offset: u32 = 0;
 
         // For split BTFs both ids and string offsets are logically consecutive.
@@ -156,8 +157,8 @@ impl CachedBtfObj {
         let offset = header.hdr_len + header.type_off;
         reader.seek(SeekFrom::Start(offset as u64))?;
 
-        let mut strings: HashMap<String, Vec<u32>> = HashMap::new();
-        let mut types = HashMap::new();
+        let mut strings: HashMap<String, Vec<u32>> = HashMap::with_capacity(est_str);
+        let mut types = HashMap::with_capacity(est_ty);
 
         if base.is_none() {
             // Add special type Void with ID 0 (not described in type section)
@@ -272,6 +273,7 @@ impl MmapBtfObj {
                 header.version
             )));
         }
+        let (_, est_ty) = header.estimates();
 
         // Then sanity check the string section.
         if len < (header.str_len + header.str_off) as usize {
@@ -284,7 +286,7 @@ impl MmapBtfObj {
         let offset = header.hdr_len + header.type_off;
         reader.seek(SeekFrom::Start(offset as u64))?;
 
-        let mut offsets = Vec::new();
+        let mut offsets = Vec::with_capacity(est_ty);
         let mut types = 0;
 
         let end_type_section = (offset + header.type_len) as u64;
