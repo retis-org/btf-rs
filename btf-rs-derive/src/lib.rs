@@ -27,12 +27,25 @@ pub fn cbtf_type_derive(input: TokenStream) -> TokenStream {
         _ => panic!("{name} is not a struct"),
     };
 
+    let mut offset = 0;
+    let bytes_fields = fields
+        .iter()
+        .map(|f| gen_bytes_field(f.ident.as_ref().unwrap(), &f.ty, &mut offset));
     let reader_fields = fields
         .iter()
         .map(|f| gen_reader_field(f.ident.as_ref().unwrap(), &f.ty));
 
     quote! {
         impl #name {
+            pub(super) fn from_bytes(
+                buf: &[u8],
+                endianness: &Endianness
+            ) -> crate::Result<Self> {
+                Ok(#name {
+                    #( #bytes_fields )*
+                })
+            }
+
             pub(super) fn from_reader<R: std::io::Read>(
                 reader: &mut R,
                 endianness: &crate::cbtf::Endianness,
@@ -44,6 +57,41 @@ pub fn cbtf_type_derive(input: TokenStream) -> TokenStream {
         }
     }
     .into()
+}
+
+// Generate struct fields initialization using the input data from bytes.
+// e.g. `u32 val: endianness.u32_from_bytes(&buf[0..4])?,`
+fn gen_bytes_field(ident: &Ident, r#type: &Type, offset: &mut usize) -> proc_macro2::TokenStream {
+    let ty = match r#type {
+        Type::Path(tp) => &tp.path,
+        _ => panic!("Field {ident:?} is not a plain type"),
+    };
+
+    let from = *offset;
+    match ty.to_token_stream().to_string().as_str() {
+        "u16" => {
+            let to = from + 2;
+            *offset = to;
+            quote! {
+                #ident: endianness.u16_from_bytes(&buf[#from..#to])?,
+            }
+        }
+        "u32" => {
+            let to = from + 4;
+            *offset = to;
+            quote! {
+                #ident: endianness.u32_from_bytes(&buf[#from..#to])?,
+            }
+        }
+        "i32" => {
+            let to = from + 4;
+            *offset = to;
+            quote! {
+                #ident: endianness.i32_from_bytes(&buf[#from..#to])?,
+            }
+        }
+        ty => panic!("Unsupported field type ({ty})"),
+    }
 }
 
 // Generate struct fields initialization using the input data from a reader.
