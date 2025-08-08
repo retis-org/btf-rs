@@ -12,6 +12,14 @@ fn file() -> Btf {
     Btf::from_file("tests/assets/btf/vmlinux").unwrap()
 }
 
+fn file_cache() -> Btf {
+    Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Cache).unwrap()
+}
+
+fn file_mmap() -> Btf {
+    Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Mmap).unwrap()
+}
+
 #[cfg(feature = "elf")]
 fn elf() -> Btf {
     Btf::from_bytes(
@@ -30,6 +38,16 @@ fn compressed_elf(alg: &str) -> Btf {
 
 fn split_file() -> Btf {
     let vmlinux = Btf::from_file("tests/assets/btf/vmlinux").unwrap();
+    Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
+}
+
+fn split_file_cache() -> Btf {
+    let vmlinux = Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Cache).unwrap();
+    Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
+}
+
+fn split_file_mmap() -> Btf {
+    let vmlinux = Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Mmap).unwrap();
     Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
 }
 
@@ -71,18 +89,24 @@ fn split_compressed_elf(alg: &str, ext: &str) -> Btf {
 }
 
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 fn double_split(btf: Btf) {
     assert!(Btf::from_split_file("tests/assets/btf/openvswitch", &btf).is_err());
 }
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -138,12 +162,16 @@ fn resolve_ids_by_name(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -198,12 +226,16 @@ fn resolve_anon_name(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -261,12 +293,16 @@ fn resolve_anon_regex(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -318,12 +354,16 @@ fn iter_types(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -349,12 +389,16 @@ fn resolve_types_by_name(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -382,12 +426,16 @@ fn resolve_types_by_name_unknown(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -417,12 +465,16 @@ fn check_resolved_type(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -469,12 +521,16 @@ fn bijection(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -557,11 +613,13 @@ fn resolve_function(btf: Btf) {
 }
 
 #[test]
-fn wrong_file() {
+fn wrong_cache() {
     assert!(Btf::from_file("/does/not/exist").is_err());
 }
 
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -617,6 +675,8 @@ fn resolve_split_struct(btf: Btf) {
 }
 
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -693,6 +753,8 @@ fn resolve_split_func(btf: Btf) {
 }
 
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
