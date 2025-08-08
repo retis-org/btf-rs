@@ -5,12 +5,15 @@
 
 #![allow(non_camel_case_types, dead_code)]
 
-use std::io::Read;
+use std::{
+    io::{Read, Seek, SeekFrom},
+    mem,
+};
 
 use btf_rs_derive::cbtf_type;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 
-use crate::{Error, Result};
+use crate::{BtfKind, Error, Result};
 
 pub(super) enum Endianness {
     Little,
@@ -110,6 +113,28 @@ impl btf_header {
             endianness,
         ))
     }
+}
+
+/// Skip a BTF type defined in the provided seekable reader.
+pub(crate) fn btf_skip_type<R: Read + Seek>(reader: &mut R, endianness: &Endianness) -> Result<()> {
+    // Skip header::name_off.
+    reader.seek(SeekFrom::Current(4))?;
+
+    // Read header::info.
+    let info = endianness.u32_from_reader(reader)?;
+
+    // Skip the BTF type size (we already skip 4 bytes + read 4 bytes).
+    let id = (info >> 24) & 0x1f;
+    let vlen = (info & 0xffff) as usize;
+    reader.seek(SeekFrom::Current(
+        (BtfKind::from_id(id)?.size(vlen) - 2 * mem::size_of::<u32>()) as i64,
+    ))?;
+
+    Ok(())
+}
+
+pub(crate) fn btf_get_name_offset(buf: &[u8], endianness: &Endianness) -> Result<usize> {
+    Ok(endianness.u32_from_bytes(&buf[0..4])? as usize)
 }
 
 #[cbtf_type]

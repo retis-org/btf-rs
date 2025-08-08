@@ -9,6 +9,8 @@ use std::{
     sync::Arc,
 };
 
+use memmap2::MmapOptions;
+
 use crate::{cbtf, obj::BtfObj, Error, Result};
 
 /// Main representation of a parsed BTF object. Provides helpers to resolve
@@ -19,13 +21,35 @@ pub struct Btf {
 }
 
 impl Btf {
-    /// Parse a stand-alone BTF object file and construct a Rust representation for later
-    /// use. Trying to open split BTF files using this function will fail. For split BTF
-    /// files use `Btf::from_split_file()`.
+    /// Parse a stand-alone BTF object file and construct a Rust representation
+    /// for later use. The input file will be mmaped if supported, otherwise the
+    /// BTF data will be cached in memory. See `Btf::mmap_from_file` and
+    /// `Btf::cache_from_file`.
+    ///
+    /// Trying to open split BTF files using this function will fail. For split
+    /// BTF files use `Btf::from_split_file`.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
+        Self::mmap_from_file(&path).or_else(|_| Self::cache_from_file(&path))
+    }
+
+    /// Perform the same actions as `Btf::from_file` but force caching the BTF
+    /// data in memory for faster API performances.
+    pub fn cache_from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(
                 &mut BufReader::new(File::open(path)?),
+                None,
+            )?),
+            base: None,
+        })
+    }
+
+    /// Perform the same actions as `Btf::from_file` but force mmaping the BTF
+    /// data in memory for a faster initialization and a lower memory footprint.
+    pub fn mmap_from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
+        Ok(Btf {
+            obj: Arc::new(BtfObj::from_mmap(
+                unsafe { MmapOptions::new().map_copy_read_only(&File::open(path)?)? },
                 None,
             )?),
             base: None,
@@ -48,7 +72,7 @@ impl Btf {
         })
     }
 
-    /// Performs the same actions as from_file(), but fed with a byte slice.
+    /// Perform the same actions as `Btf::from_file`, but fed with a byte slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes), None)?),
@@ -385,6 +409,23 @@ impl BtfKind {
             19 => Enum64,
             x => return Err(Error::InvalidType(x)),
         })
+    }
+
+    pub(crate) fn size(&self, vlen: usize) -> usize {
+        use BtfKind::*;
+        mem::size_of::<cbtf::btf_type>()
+            + match self {
+                Ptr | Fwd | Typedef | Volatile | Const | Restrict | Func | Float | TypeTag => 0,
+                Int => mem::size_of::<cbtf::btf_int>(),
+                Array => mem::size_of::<cbtf::btf_array>(),
+                Struct | Union => vlen * mem::size_of::<cbtf::btf_member>(),
+                Enum => vlen * mem::size_of::<cbtf::btf_enum>(),
+                FuncProto => vlen * mem::size_of::<cbtf::btf_param>(),
+                Var => mem::size_of::<cbtf::btf_var>(),
+                Datasec => vlen * mem::size_of::<cbtf::btf_var_secinfo>(),
+                DeclTag => mem::size_of::<cbtf::btf_decl_tag>(),
+                Enum64 => vlen * mem::size_of::<cbtf::btf_enum64>(),
+            }
     }
 }
 
