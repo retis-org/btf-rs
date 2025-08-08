@@ -105,6 +105,8 @@ pub(super) trait BtfBackend {
 /// initialization and increase in memory footprint.
 struct CachedBtfObj {
     header: cbtf::btf_header,
+    // Type id offset from the base, 0 if not.
+    type_offset: u32,
     // Map from str offsets to the strings. For internal use (name resolution)
     // only.
     str_cache: HashMap<u32, String>,
@@ -114,7 +116,7 @@ struct CachedBtfObj {
     // Vector of all the types parsed from the BTF info. The vector makes the
     // retrieval by their id implicit as the id is incremental in the BTF file;
     // but that is really the goal here.
-    types: HashMap<u32, Type>,
+    types: Vec<Type>,
 }
 
 impl CachedBtfObj {
@@ -158,12 +160,12 @@ impl CachedBtfObj {
         reader.seek(SeekFrom::Start(offset as u64))?;
 
         let mut strings: HashMap<String, Vec<u32>> = HashMap::with_capacity(est_str);
-        let mut types = HashMap::with_capacity(est_ty);
+        let mut types = Vec::with_capacity(est_ty);
 
         if base.is_none() {
             // Add special type Void with ID 0 (not described in type section)
             // only on base BTF.
-            types.insert(0, Type::Void);
+            types.push(Type::Void);
         }
 
         let end_type_section = offset as u64 + header.type_len as u64;
@@ -188,7 +190,7 @@ impl CachedBtfObj {
                 }
             }
 
-            types.insert(id, r#type);
+            types.push(r#type);
             id += 1;
         }
 
@@ -199,6 +201,10 @@ impl CachedBtfObj {
 
         Ok(Self {
             header,
+            type_offset: match base {
+                Some(base) => base.types() as u32,
+                None => 0,
+            },
             str_cache,
             strings,
             types,
@@ -220,7 +226,13 @@ impl BtfBackend for CachedBtfObj {
     }
 
     fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
-        Ok(self.types.get(&id).cloned())
+        Ok(self
+            .types
+            .get(
+                id.checked_sub(self.type_offset)
+                    .ok_or(Error::InvalidType(id))? as usize,
+            )
+            .cloned())
     }
 
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
