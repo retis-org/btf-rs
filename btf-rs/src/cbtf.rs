@@ -5,7 +5,10 @@
 
 #![allow(non_camel_case_types, dead_code)]
 
-use std::io::Read;
+use std::{
+    io::{Read, Seek, SeekFrom},
+    mem,
+};
 
 use btf_rs_derive::cbtf_type;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
@@ -124,6 +127,24 @@ impl BtfKind {
         })
     }
 
+    // Returns the size a given type takes while stored in memory.
+    fn size(&self, vlen: usize) -> usize {
+        use BtfKind::*;
+        mem::size_of::<btf_type>()
+            + match self {
+                Ptr | Fwd | Typedef | Volatile | Const | Restrict | Func | Float | TypeTag => 0,
+                Int => mem::size_of::<btf_int>(),
+                Array => mem::size_of::<btf_array>(),
+                Struct | Union => vlen * mem::size_of::<btf_member>(),
+                Enum => vlen * mem::size_of::<btf_enum>(),
+                FuncProto => vlen * mem::size_of::<btf_param>(),
+                Var => mem::size_of::<btf_var>(),
+                Datasec => vlen * mem::size_of::<btf_var_secinfo>(),
+                DeclTag => mem::size_of::<btf_decl_tag>(),
+                Enum64 => vlen * mem::size_of::<btf_enum64>(),
+            }
+    }
+
     // Returns true if the type is allowed to be anonymous, aka. a valid name
     // offset of 0. Those can be recognized in the BTF documentation when the
     // name offset is "0 or offset to a valid C identifier".
@@ -193,6 +214,24 @@ impl btf_header {
             endianness,
         ))
     }
+}
+
+/// Skip a BTF type defined in the provided seekable reader.
+pub(super) fn btf_skip_type<R: Read + Seek>(reader: &mut R, endianness: &Endianness) -> Result<()> {
+    // Skip header::name_off.
+    reader.seek(SeekFrom::Current(4))?;
+
+    // Read header::info.
+    let info = endianness.u32_from_reader(reader)?;
+
+    // Skip the BTF type size (we already skip 4 bytes + read 4 bytes).
+    let id = (info >> 24) & 0x1f;
+    let vlen = (info & 0xffff) as usize;
+    reader.seek(SeekFrom::Current(
+        (BtfKind::from_id(id)?.size(vlen) - 2 * mem::size_of::<u32>()) as i64,
+    ))?;
+
+    Ok(())
 }
 
 #[cbtf_type]
