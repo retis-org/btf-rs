@@ -8,7 +8,23 @@ use std::{
     sync::Arc,
 };
 
+use memmap2::MmapOptions;
+
 use crate::{cbtf, obj::BtfObj, Error, Result};
+
+/// Backend used by the `Btf` object to store and access the underlying BTF
+/// information.
+#[non_exhaustive]
+pub enum Backend {
+    /// Parse the BTF data during initialization and then store the result. This
+    /// provides faster API calls at the cost of a slower initialization and
+    /// larger memory footprint.
+    Cache,
+    /// Mmap the BTF data without parsing all of it. This provides a smaller
+    /// memory footprint and faster initialization at the cost of slower API
+    /// calls.
+    Mmap,
+}
 
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names.
@@ -18,15 +34,29 @@ pub struct Btf {
 }
 
 impl Btf {
-    /// Parse a stand-alone BTF object file and construct a Rust representation for later
-    /// use. Trying to open split BTF files using this function will fail. For split BTF
-    /// files use `Btf::from_split_file()`.
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
+    /// Parse a stand-alone BTF object file and construct a Rust representation
+    /// for later use. By default `Backend::Cache` is used.
+    ///
+    /// Trying to open split BTF files using this function will fail. For split
+    /// BTF files use `Btf::from_split_file`.
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_file_with_backend(&path, Backend::Cache)
+    }
+
+    /// Same as `Btf::from_file` but forcing a given `Backend` to be used. This
+    /// allow selecting the desired behavior and balance, but can fail if a
+    /// given `Backend` isn't supported by the underlying system.
+    pub fn from_file_with_backend<P: AsRef<Path>>(path: P, backend: Backend) -> Result<Self> {
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(
-                &mut BufReader::new(File::open(path)?),
-                None,
-            )?),
+            obj: Arc::new(match backend {
+                Backend::Cache => {
+                    BtfObj::from_reader(&mut BufReader::new(File::open(path)?), None)?
+                }
+                Backend::Mmap => BtfObj::from_mmap(
+                    unsafe { MmapOptions::new().map_copy_read_only(&File::open(path)?)? },
+                    None,
+                )?,
+            }),
             base: None,
         })
     }
@@ -47,7 +77,7 @@ impl Btf {
         })
     }
 
-    /// Performs the same actions as from_file(), but fed with a byte slice.
+    /// Perform the same actions as `Btf::from_file`, but fed with a byte slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes), None)?),

@@ -1,10 +1,13 @@
 use std::{
     collections::HashMap,
     ffi::CStr,
-    io::{BufRead, Seek, SeekFrom},
+    io::{BufRead, Cursor, Seek, SeekFrom},
+    mem,
     ops::Deref,
     sync::Arc,
 };
+
+use memmap2::Mmap;
 
 use crate::{btf::*, cbtf, Error, Result};
 
@@ -21,7 +24,15 @@ impl Deref for BtfObj {
 }
 
 impl BtfObj {
-    /// Parse a BTF object from a Reader. The BTF data is cached in memory.
+    /// Parse a BTF object from a mmaped file. This takes the `Mmap` ownership
+    /// to allow reading the BTF data on-demand. This provides a faster
+    /// initialization and a lower memory footprint than `Self::from_reader`.
+    pub(super) fn from_mmap(mmap: Mmap, base: Option<Arc<BtfObj>>) -> Result<Self> {
+        Ok(Self(Box::new(MmapBtfObj::new(mmap, base)?)))
+    }
+
+    /// Parse a BTF object from a Reader. The BTF data is cached in memory. This
+    /// provides faster API access than `Self::from_mmap`.
     pub(super) fn from_reader<R: Seek + BufRead>(
         reader: &mut R,
         base: Option<Arc<BtfObj>>,
@@ -135,10 +146,7 @@ impl CachedBtfObj {
             let mut raw = Vec::new();
             let bytes = reader.read_until(b'\0', &mut raw)? as u32;
 
-            let s = CStr::from_bytes_with_nul(&raw)
-                .map_err(|e| Error::Format(format!("Could not parse string: {e}")))?
-                .to_str()
-                .map_err(|e| Error::Format(format!("Invalid UTF-8 string: {e}")))?;
+            let s = bytes_to_str(&raw)?;
             str_cache.insert(start_str_off + offset, String::from(s));
 
             offset += bytes;
@@ -230,4 +238,186 @@ impl BtfBackend for CachedBtfObj {
             .flatten()
             .collect::<Vec<_>>())
     }
+}
+
+/// Backend for a parsed BTF object keeping the input data memory-mapped. This
+/// provides a faster initialization and lower memory footprint at the cost of
+/// slower API performances.
+struct MmapBtfObj {
+    endianness: cbtf::Endianness,
+    header: cbtf::btf_header,
+    // String offset from the base, 0 if not.
+    str_offset: u32,
+    // Type id offset from the base, 0 if not.
+    type_offset: u32,
+    // Number of types defined in the object.
+    types: usize,
+    // Memory-mapped reader.
+    mmap: Mmap,
+    // Map from type ids to their offsets in the mmaped BTF.
+    type_offsets: Vec<usize>,
+}
+
+impl MmapBtfObj {
+    fn new(mmap: Mmap, base: Option<Arc<BtfObj>>) -> Result<Self> {
+        let len = mmap.len();
+        let mut reader = Cursor::new(mmap);
+
+        // First parse the BTF header, retrieve the endianness & perform sanity
+        // checks.
+        let (header, endianness) = cbtf::btf_header::from_reader(&mut reader)?;
+        if header.version != 1 {
+            return Err(Error::Format(format!(
+                "Unsupported BTF version: {}",
+                header.version
+            )));
+        }
+
+        // Then sanity check the string section.
+        if len < (header.str_len + header.str_off) as usize {
+            return Err(Error::Format(
+                "String section is missing or incomplete".to_string(),
+            ));
+        }
+
+        // Finally build our representation of the BTF types.
+        let offset = header.hdr_len + header.type_off;
+        reader.seek(SeekFrom::Start(offset as u64))?;
+
+        let mut offsets = Vec::new();
+        let mut types = 0;
+
+        let end_type_section = (offset + header.type_len) as u64;
+        while reader.stream_position()? < end_type_section {
+            offsets.push(reader.stream_position()? as usize);
+            cbtf::btf_skip_type(&mut reader, &endianness)?;
+            types += 1;
+        }
+
+        // Sanity check
+        if reader.stream_position()? != end_type_section {
+            return Err(Error::Format("Invalid type section".to_string()));
+        }
+
+        let (str_offset, type_offset) = match base {
+            Some(base) => (base.header().str_len, base.types() as u32),
+            None => (0, 0),
+        };
+
+        Ok(Self {
+            endianness,
+            header,
+            str_offset,
+            type_offset,
+            types,
+            mmap: reader.into_inner(),
+            type_offsets: offsets,
+        })
+    }
+
+    // Iterate over the type names, calling a function on them (providing the
+    // type id and name bytes buffer).
+    fn iter_over_names<F>(&self, mut f: F) -> Result<()>
+    where
+        F: FnMut(u32, &[u8]) -> Result<()>,
+    {
+        let mmap = &self.mmap;
+
+        for (id, offset) in self.type_offsets.iter().enumerate() {
+            let bt = cbtf::btf_type::from_bytes(&mmap[*offset..], &self.endianness)?;
+            let name_off = match bt.name_offset() {
+                Some(offset) => offset,
+                None => continue,
+            };
+
+            if name_off < self.header.str_len {
+                let start = (self.header.hdr_len + self.header.str_off + name_off) as usize;
+
+                f(id as u32 + 1 + self.type_offset, &mmap[start..])?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl BtfBackend for MmapBtfObj {
+    fn header(&self) -> &cbtf::btf_header {
+        &self.header
+    }
+
+    fn types(&self) -> usize {
+        // Take `Type::Void` into account for base objects.
+        (if self.type_offset != 0 { 0 } else { 1 }) + self.types
+    }
+
+    fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        let len = name.len();
+        let mut ids = Vec::new();
+
+        self.iter_over_names(|id, buf| {
+            // If len == buf.len(), the NULL char isn't there.
+            if len < buf.len() && buf[len] == b'\0' && name.as_bytes() == &buf[..len] {
+                ids.push(id);
+            }
+            Ok(())
+        })?;
+
+        Ok(ids)
+    }
+
+    fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
+        let id = id
+            .checked_sub(self.type_offset)
+            .ok_or(Error::InvalidType(id))? as usize;
+        if id == 0 {
+            return Ok(Some(Type::Void));
+        }
+
+        Ok(match self.type_offsets.get(id - 1) {
+            Some(offset) => {
+                let bt = cbtf::btf_type::from_bytes(&self.mmap[*offset..], &self.endianness)?;
+                Some(Type::from_bytes(
+                    &self.mmap[(*offset + mem::size_of::<cbtf::btf_type>())..],
+                    &self.endianness,
+                    bt,
+                )?)
+            }
+            None => None,
+        })
+    }
+
+    fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
+        let offset = match offset.checked_sub(self.str_offset) {
+            Some(id) if id <= self.header.str_len => id,
+            _ => return None,
+        };
+
+        let start = (self.header.hdr_len + self.header.str_off + offset) as usize;
+        bytes_to_str(&self.mmap[start..])
+            .ok()
+            .map(|s| s.to_string())
+    }
+
+    #[cfg(feature = "regex")]
+    fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        let mut ids = Vec::new();
+        self.iter_over_names(|id, buf| {
+            if let Ok(s) = bytes_to_str(buf) {
+                if re.is_match(s) {
+                    ids.push(id);
+                }
+            }
+            Ok(())
+        })?;
+        Ok(ids)
+    }
+}
+
+// Converts a bytes array to an str representation, without copy.
+fn bytes_to_str(buf: &[u8]) -> Result<&str> {
+    CStr::from_bytes_until_nul(buf)
+        .map_err(|e| Error::Format(format!("Could not parse string: {e}")))?
+        .to_str()
+        .map_err(|e| Error::Format(format!("Invalid UTF-8 string: {e}")))
 }
