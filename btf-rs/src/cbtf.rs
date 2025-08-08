@@ -18,25 +18,25 @@ pub(super) enum Endianness {
 }
 
 impl Endianness {
-    fn u16_from_reader<R: Read>(&self, reader: &mut R) -> std::result::Result<u16, std::io::Error> {
-        match &self {
-            Endianness::Little => reader.read_u16::<LittleEndian>(),
-            Endianness::Big => reader.read_u16::<BigEndian>(),
-        }
+    fn u16_from_reader<R: Read>(&self, reader: &mut R) -> Result<u16> {
+        Ok(match &self {
+            Endianness::Little => reader.read_u16::<LittleEndian>()?,
+            Endianness::Big => reader.read_u16::<BigEndian>()?,
+        })
     }
 
-    fn u32_from_reader<R: Read>(&self, reader: &mut R) -> std::result::Result<u32, std::io::Error> {
-        match &self {
-            Endianness::Little => reader.read_u32::<LittleEndian>(),
-            Endianness::Big => reader.read_u32::<BigEndian>(),
-        }
+    fn u32_from_reader<R: Read>(&self, reader: &mut R) -> Result<u32> {
+        Ok(match &self {
+            Endianness::Little => reader.read_u32::<LittleEndian>()?,
+            Endianness::Big => reader.read_u32::<BigEndian>()?,
+        })
     }
 
-    fn i32_from_reader<R: Read>(&self, reader: &mut R) -> std::result::Result<i32, std::io::Error> {
-        match &self {
-            Endianness::Little => reader.read_i32::<LittleEndian>(),
-            Endianness::Big => reader.read_i32::<BigEndian>(),
-        }
+    fn i32_from_reader<R: Read>(&self, reader: &mut R) -> Result<i32> {
+        Ok(match &self {
+            Endianness::Little => reader.read_i32::<LittleEndian>()?,
+            Endianness::Big => reader.read_i32::<BigEndian>()?,
+        })
     }
 }
 
