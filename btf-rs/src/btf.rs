@@ -4,6 +4,7 @@ use std::{
     convert::AsRef,
     fs::File,
     io::{BufReader, Cursor, Read},
+    mem,
     path::Path,
     sync::Arc,
 };
@@ -271,6 +272,11 @@ impl Type {
         })
     }
 
+    /// Creates a new Type reading a BTF definition from bytes.
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<Self> {
+        Self::from_reader(&mut Cursor::new(buf), endianness)
+    }
+
     pub fn name(&self) -> &'static str {
         match &self {
             Type::Void => "void",
@@ -339,6 +345,17 @@ pub struct Int {
 }
 
 impl Int {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Int> {
+        Ok(Int {
+            btf_type,
+            btf_int: cbtf::btf_int::from_bytes(buf, endianness)?,
+        })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -400,6 +417,17 @@ pub struct Array {
 
 #[allow(clippy::len_without_is_empty)]
 impl Array {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Array> {
+        Ok(Array {
+            btf_type,
+            btf_array: cbtf::btf_array::from_bytes(buf, endianness)?,
+        })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -430,6 +458,24 @@ pub struct Struct {
 }
 
 impl Struct {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Struct> {
+        let mut members = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            members.push(Member::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_member>())..],
+                endianness,
+                btf_type.kind_flag(),
+            )?);
+        }
+
+        Ok(Struct { btf_type, members })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -470,6 +516,17 @@ pub struct Member {
 }
 
 impl Member {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        kind_flag: u32,
+    ) -> Result<Member> {
+        Ok(Member {
+            kind_flag,
+            btf_member: cbtf::btf_member::from_bytes(buf, endianness)?,
+        })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -515,6 +572,23 @@ pub struct Enum {
 
 #[allow(clippy::len_without_is_empty)]
 impl Enum {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Enum> {
+        let mut members = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            members.push(EnumMember::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_enum>())..],
+                endianness,
+            )?);
+        }
+
+        Ok(Enum { btf_type, members })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -555,6 +629,12 @@ pub struct EnumMember {
 }
 
 impl EnumMember {
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<EnumMember> {
+        Ok(EnumMember {
+            btf_enum: cbtf::btf_enum::from_bytes(buf, endianness)?,
+        })
+    }
+
     fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<EnumMember> {
         Ok(EnumMember {
             btf_enum: cbtf::btf_enum::from_reader(reader, endianness)?,
@@ -691,6 +771,26 @@ pub struct FuncProto {
 }
 
 impl FuncProto {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<FuncProto> {
+        let mut parameters = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            parameters.push(Parameter::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_param>())..],
+                endianness,
+            )?);
+        }
+
+        Ok(FuncProto {
+            btf_type,
+            parameters,
+        })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -720,6 +820,12 @@ pub struct Parameter {
 }
 
 impl Parameter {
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<Parameter> {
+        Ok(Parameter {
+            btf_param: cbtf::btf_param::from_bytes(buf, endianness)?,
+        })
+    }
+
     fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<Parameter> {
         Ok(Parameter {
             btf_param: cbtf::btf_param::from_reader(reader, endianness)?,
@@ -749,6 +855,17 @@ pub struct Var {
 }
 
 impl Var {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Var> {
+        Ok(Var {
+            btf_type,
+            btf_var: cbtf::btf_var::from_bytes(buf, endianness)?,
+        })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -787,6 +904,26 @@ pub struct Datasec {
 }
 
 impl Datasec {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Datasec> {
+        let mut variables = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            variables.push(VarSecinfo::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_var_secinfo>())..],
+                endianness,
+            )?);
+        }
+
+        Ok(Datasec {
+            btf_type,
+            variables,
+        })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -818,6 +955,12 @@ pub struct VarSecinfo {
 }
 
 impl VarSecinfo {
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<VarSecinfo> {
+        Ok(VarSecinfo {
+            btf_var_secinfo: cbtf::btf_var_secinfo::from_bytes(buf, endianness)?,
+        })
+    }
+
     fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<VarSecinfo> {
         Ok(VarSecinfo {
             btf_var_secinfo: cbtf::btf_var_secinfo::from_reader(reader, endianness)?,
@@ -869,6 +1012,17 @@ pub struct DeclTag {
 }
 
 impl DeclTag {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<DeclTag> {
+        Ok(DeclTag {
+            btf_type,
+            btf_decl_tag: cbtf::btf_decl_tag::from_bytes(buf, endianness)?,
+        })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -908,6 +1062,23 @@ pub struct Enum64 {
 
 #[allow(clippy::len_without_is_empty)]
 impl Enum64 {
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Enum64> {
+        let mut members = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            members.push(Enum64Member::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_enum64>())..],
+                endianness,
+            )?);
+        }
+
+        Ok(Enum64 { btf_type, members })
+    }
+
     fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -948,6 +1119,12 @@ pub struct Enum64Member {
 }
 
 impl Enum64Member {
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<Enum64Member> {
+        Ok(Enum64Member {
+            btf_enum64: cbtf::btf_enum64::from_bytes(buf, endianness)?,
+        })
+    }
+
     pub(super) fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
