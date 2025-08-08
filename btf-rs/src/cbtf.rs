@@ -8,7 +8,7 @@
 use std::io::Read;
 
 use btf_rs_derive::cbtf_type;
-use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 
 use crate::{Error, Result};
 
@@ -18,6 +18,39 @@ pub(super) enum Endianness {
 }
 
 impl Endianness {
+    fn u16_from_bytes(&self, buf: &[u8]) -> Result<u16> {
+        if buf.len() < 2 {
+            return Err(Error::OpNotSupp("Not enough bytes in buffer".to_string()));
+        }
+
+        Ok(match &self {
+            Endianness::Little => LittleEndian::read_u16(buf),
+            Endianness::Big => BigEndian::read_u16(buf),
+        })
+    }
+
+    fn u32_from_bytes(&self, buf: &[u8]) -> Result<u32> {
+        if buf.len() < 4 {
+            return Err(Error::OpNotSupp("Not enough bytes in buffer".to_string()));
+        }
+
+        Ok(match &self {
+            Endianness::Little => LittleEndian::read_u32(buf),
+            Endianness::Big => BigEndian::read_u32(buf),
+        })
+    }
+
+    fn i32_from_bytes(&self, buf: &[u8]) -> Result<i32> {
+        if buf.len() < 4 {
+            return Err(Error::OpNotSupp("Not enough bytes in buffer".to_string()));
+        }
+
+        Ok(match &self {
+            Endianness::Little => LittleEndian::read_i32(buf),
+            Endianness::Big => BigEndian::read_i32(buf),
+        })
+    }
+
     fn u16_from_reader<R: Read>(&self, reader: &mut R) -> Result<u16> {
         Ok(match &self {
             Endianness::Little => reader.read_u16::<LittleEndian>()?,

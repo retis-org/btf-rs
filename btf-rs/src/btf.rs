@@ -273,6 +273,15 @@ impl Type {
         }
     }
 
+    /// Creates a new Type reading a BTF definition from bytes.
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        bt: cbtf::btf_type,
+    ) -> Result<Self> {
+        Self::from_reader(&mut Cursor::new(buf), endianness, bt)
+    }
+
     pub fn name(&self) -> &'static str {
         match &self {
             Type::Void => "void",
