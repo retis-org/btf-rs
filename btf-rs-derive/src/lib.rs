@@ -2,6 +2,18 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::*;
 
+#[proc_macro_attribute]
+pub fn cbtf_type(_: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as Item);
+
+    quote! {
+        #[derive(Clone, Copy, Debug, Eq, PartialEq, btf_rs_derive::CBtfType)]
+        #[repr(C, packed)]
+        #input
+    }
+    .into()
+}
+
 #[proc_macro_derive(CBtfType)]
 pub fn cbtf_type_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);

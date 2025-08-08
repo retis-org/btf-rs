@@ -7,7 +7,7 @@
 
 use std::io::Read;
 
-use btf_rs_derive::CBtfType;
+use btf_rs_derive::cbtf_type;
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 
 use crate::{Error, Result};
@@ -79,8 +79,7 @@ impl btf_header {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_type {
     pub(super) name_off: u32,
     // bits 0-15:  vlen
@@ -118,8 +117,7 @@ impl btf_type {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_int {
     data: u32,
 }
@@ -142,24 +140,21 @@ pub(super) const BTF_INT_SIGNED: u32 = 1 << 0;
 pub(super) const BTF_INT_CHAR: u32 = 1 << 1;
 pub(super) const BTF_INT_BOOL: u32 = 1 << 2;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_array {
     pub(super) r#type: u32,
     pub(super) index_type: u32,
     pub(super) nelems: u32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_member {
     pub(super) name_off: u32,
     pub(super) r#type: u32,
     pub(super) offset: u32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_enum {
     pub(super) name_off: u32,
     pub(super) val: u32,
@@ -169,35 +164,30 @@ pub(super) const BTF_FUNC_STATIC: u32 = 0;
 pub(super) const BTF_FUNC_GLOBAL: u32 = 1;
 pub(super) const BTF_FUNC_EXTERN: u32 = 2;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_param {
     pub(super) name_off: u32,
     pub(super) r#type: u32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_var {
     pub(super) linkage: u32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_var_secinfo {
     pub(super) r#type: u32,
     pub(super) offset: u32,
     pub(super) size: u32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_decl_tag {
     pub(super) component_idx: i32,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
-#[repr(C, packed)]
+#[cbtf_type]
 pub(super) struct btf_enum64 {
     pub(super) name_off: u32,
     pub(super) val_lo32: u32,
