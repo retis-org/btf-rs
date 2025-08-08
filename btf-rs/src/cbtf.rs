@@ -7,6 +7,7 @@
 
 use std::io::Read;
 
+use btf_rs_derive::CBtfType;
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 
 use crate::{Error, Result};
@@ -78,7 +79,7 @@ impl btf_header {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_type {
     pub(super) name_off: u32,
@@ -96,17 +97,6 @@ pub(super) struct btf_type {
 }
 
 impl btf_type {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &Endianness,
-    ) -> Result<btf_type> {
-        Ok(btf_type {
-            name_off: endianness.u32_from_reader(reader)?,
-            info: endianness.u32_from_reader(reader)?,
-            size_type: endianness.u32_from_reader(reader)?,
-        })
-    }
-
     pub(super) fn vlen(&self) -> u32 {
         self.info & 0xffff
     }
@@ -128,19 +118,13 @@ impl btf_type {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_int {
     data: u32,
 }
 
 impl btf_int {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_int> {
-        Ok(btf_int {
-            data: endianness.u32_from_reader(reader)?,
-        })
-    }
-
     pub(super) fn encoding(&self) -> u32 {
         (self.data & 0x0f000000) >> 24
     }
@@ -158,7 +142,7 @@ pub(super) const BTF_INT_SIGNED: u32 = 1 << 0;
 pub(super) const BTF_INT_CHAR: u32 = 1 << 1;
 pub(super) const BTF_INT_BOOL: u32 = 1 << 2;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_array {
     pub(super) r#type: u32,
@@ -166,20 +150,7 @@ pub(super) struct btf_array {
     pub(super) nelems: u32,
 }
 
-impl btf_array {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &Endianness,
-    ) -> Result<btf_array> {
-        Ok(btf_array {
-            r#type: endianness.u32_from_reader(reader)?,
-            index_type: endianness.u32_from_reader(reader)?,
-            nelems: endianness.u32_from_reader(reader)?,
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_member {
     pub(super) name_off: u32,
@@ -187,76 +158,31 @@ pub(super) struct btf_member {
     pub(super) offset: u32,
 }
 
-impl btf_member {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &Endianness,
-    ) -> Result<btf_member> {
-        Ok(btf_member {
-            name_off: endianness.u32_from_reader(reader)?,
-            r#type: endianness.u32_from_reader(reader)?,
-            offset: endianness.u32_from_reader(reader)?,
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_enum {
     pub(super) name_off: u32,
     pub(super) val: u32,
 }
 
-impl btf_enum {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &Endianness,
-    ) -> Result<btf_enum> {
-        Ok(btf_enum {
-            name_off: endianness.u32_from_reader(reader)?,
-            val: endianness.u32_from_reader(reader)?,
-        })
-    }
-}
-
 pub(super) const BTF_FUNC_STATIC: u32 = 0;
 pub(super) const BTF_FUNC_GLOBAL: u32 = 1;
 pub(super) const BTF_FUNC_EXTERN: u32 = 2;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_param {
     pub(super) name_off: u32,
     pub(super) r#type: u32,
 }
 
-impl btf_param {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &Endianness,
-    ) -> Result<btf_param> {
-        Ok(btf_param {
-            name_off: endianness.u32_from_reader(reader)?,
-            r#type: endianness.u32_from_reader(reader)?,
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_var {
     pub(super) linkage: u32,
 }
 
-impl btf_var {
-    pub(super) fn from_reader<R: Read>(reader: &mut R, endianness: &Endianness) -> Result<btf_var> {
-        Ok(btf_var {
-            linkage: endianness.u32_from_reader(reader)?,
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_var_secinfo {
     pub(super) r#type: u32,
@@ -264,53 +190,16 @@ pub(super) struct btf_var_secinfo {
     pub(super) size: u32,
 }
 
-impl btf_var_secinfo {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &Endianness,
-    ) -> Result<btf_var_secinfo> {
-        Ok(btf_var_secinfo {
-            r#type: endianness.u32_from_reader(reader)?,
-            offset: endianness.u32_from_reader(reader)?,
-            size: endianness.u32_from_reader(reader)?,
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_decl_tag {
     pub(super) component_idx: i32,
 }
 
-impl btf_decl_tag {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &Endianness,
-    ) -> Result<btf_decl_tag> {
-        Ok(btf_decl_tag {
-            component_idx: endianness.i32_from_reader(reader)?,
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, CBtfType)]
 #[repr(C, packed)]
 pub(super) struct btf_enum64 {
     pub(super) name_off: u32,
     pub(super) val_lo32: u32,
     pub(super) val_hi32: u32,
-}
-
-impl btf_enum64 {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &Endianness,
-    ) -> Result<btf_enum64> {
-        Ok(btf_enum64 {
-            name_off: endianness.u32_from_reader(reader)?,
-            val_lo32: endianness.u32_from_reader(reader)?,
-            val_hi32: endianness.u32_from_reader(reader)?,
-        })
-    }
 }

@@ -16,6 +16,7 @@ edition.workspace = true
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+btf-rs-derive = { path = "../btf-rs-derive", version = "1.1" }
 byteorder = "1.5"
 bzip2 = { version = "0.6", optional = true }
 elf = { version = "0.8", optional = true }
