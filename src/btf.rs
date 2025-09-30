@@ -174,7 +174,7 @@ impl Btf {
     /// This helper returns an iterator that allow to resolve a Type
     /// referenced in another one all the way down to the chain.
     /// The helper makes use of `Btf::resolve_chained_type()`.
-    pub fn type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> TypeIter {
+    pub fn type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> TypeIter<'_> {
         TypeIter {
             btf: self,
             r#type: self.resolve_chained_type(r#type).ok(),

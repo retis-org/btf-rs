@@ -262,7 +262,7 @@ impl BtfCollection {
         Ok(match path.file_name() {
             Some(name) => match name.to_str() {
                 Some(s) => s.to_string(),
-                None => return Err(Error::Format(format!("Invalid file name {:?}", name))),
+                None => return Err(Error::Format(format!("Invalid file name {name:?}"))),
             },
             None => {
                 return Err(Error::Format(format!(

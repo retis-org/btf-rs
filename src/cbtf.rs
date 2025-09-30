@@ -59,7 +59,7 @@ impl btf_header {
         let endianness = match magic {
             0xeB9F => Endianness::Little,
             0x9FeB => Endianness::Big,
-            magic => return Err(Error::Format(format!("Invalid BTF magic: {:#x}", magic))),
+            magic => return Err(Error::Format(format!("Invalid BTF magic: {magic:#x}"))),
         };
 
         Ok((

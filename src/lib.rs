@@ -102,11 +102,12 @@
 //!
 //! ### Feature flags
 //!
-//! - elf: Enable helpers parsing the .BTF section of ELF files in
-//!   `utils::elf`.
-//! - regex: Enable name resolutions by regex (`regex::Regex`).
-//! - test_runtime: Use the system's runtime BTF files to perform extra
-//!   integration tests.
+//! - `elf`: Enable helpers parsing the .BTF section of ELF files in
+//!   [`utils::elf`].
+//! - `elf-compression`: Enable handling of compressed ELF files (e.g.
+//!   compressed kernel modules) in [`utils::elf`]. The Bzip2, Gzip, Xz and Zstd
+//!   compression algorithms are currently supported.
+//! - `regex`: Enable name resolutions by regex ([`regex::Regex`]).
 
 pub mod btf;
 pub mod error;
