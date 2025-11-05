@@ -208,6 +208,9 @@ impl Iterator for TypeIter<'_> {
     }
 }
 
+/// Anonymous types can be fetched using this special string as name.
+pub const ANON_TYPE_NAME: &str = "(anon)";
+
 /// Rust representation of BTF types. Each type then contains its own specific
 /// data and provides helpers to access it.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -317,6 +320,11 @@ impl Type {
             _ => None,
         }
     }
+
+    /// Return whether the type is allowed to be anonymous.
+    pub(super) fn can_be_anon(&self) -> bool {
+        self.as_btf_type().is_some_and(|t| t.can_be_anon())
+    }
 }
 
 pub trait BtfType {
@@ -326,6 +334,10 @@ pub trait BtfType {
 
     fn get_type_id(&self) -> Result<u32> {
         Err(Error::OpNotSupp("No type offset in type".to_string()))
+    }
+
+    fn can_be_anon(&self) -> bool {
+        false
     }
 }
 
@@ -455,6 +467,9 @@ impl BtfType for Struct {
     fn get_name_offset(&self) -> Result<u32> {
         Ok(self.btf_type.name_off)
     }
+    fn can_be_anon(&self) -> bool {
+        true
+    }
 }
 
 /// Rust representation for BTF type `BTF_KIND_UNION`.
@@ -543,6 +558,9 @@ impl Enum {
 impl BtfType for Enum {
     fn get_name_offset(&self) -> Result<u32> {
         Ok(self.btf_type.name_off)
+    }
+    fn can_be_anon(&self) -> bool {
+        true
     }
 }
 
@@ -945,6 +963,9 @@ impl Enum64 {
 impl BtfType for Enum64 {
     fn get_name_offset(&self) -> Result<u32> {
         Ok(self.btf_type.name_off)
+    }
+    fn can_be_anon(&self) -> bool {
+        true
     }
 }
 
