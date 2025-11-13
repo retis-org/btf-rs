@@ -79,7 +79,7 @@ impl Btf {
         let mut ids = self.resolve_split_ids_by_name(name)?;
 
         if let Some(base) = &self.base {
-            ids.append(&mut base.resolve_ids_by_name(name));
+            ids.append(&mut base.resolve_ids_by_name(name)?);
         }
 
         Ok(ids)
@@ -88,7 +88,7 @@ impl Btf {
     /// Find a list of BTF ids using their name as a key, using the split BTF
     /// definition only. For internal use only.
     pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
-        Ok(self.obj.resolve_ids_by_name(name))
+        self.obj.resolve_ids_by_name(name)
     }
 
     /// Find a list of BTF ids whose names match a regex.
@@ -100,7 +100,7 @@ impl Btf {
         let mut ids = self.resolve_split_ids_by_regex(re)?;
 
         if let Some(base) = &self.base {
-            ids.append(&mut base.resolve_ids_by_regex(re));
+            ids.append(&mut base.resolve_ids_by_regex(re)?);
         }
 
         Ok(ids)
@@ -110,17 +110,18 @@ impl Btf {
     /// definition only. For internal use only.
     #[cfg(feature = "regex")]
     pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
-        Ok(self.obj.resolve_ids_by_regex(re))
+        self.obj.resolve_ids_by_regex(re)
     }
 
     /// Find a BTF type using its id as a key.
     pub fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
-        Ok(match &self.base {
-            Some(base) => base
-                .resolve_type_by_id(id)
-                .or_else(|| self.obj.resolve_type_by_id(id)),
-            None => self.obj.resolve_type_by_id(id),
-        })
+        if let Some(base) = &self.base {
+            if let Some(r#type) = base.resolve_type_by_id(id)? {
+                return Ok(Some(r#type));
+            }
+        }
+
+        self.obj.resolve_type_by_id(id)
     }
 
     /// Find a list of BTF types using their name as a key.
@@ -167,7 +168,7 @@ impl Btf {
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
-    pub fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
+    pub fn resolve_name(&self, r#type: &dyn BtfType) -> Result<String> {
         match &self.base {
             Some(base) => base
                 .resolve_name(r#type)
