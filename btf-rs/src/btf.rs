@@ -945,6 +945,10 @@ impl DeclTag {
             x => Some(x as u32),
         }
     }
+
+    pub fn is_attribute(&self) -> bool {
+        self.btf_type.kind_flag() == 1
+    }
 }
 
 impl BtfType for DeclTag {
