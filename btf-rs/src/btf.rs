@@ -246,29 +246,26 @@ impl Type {
 
         // Each BTF type needs specific handling to parse its type-specific
         // header.
-        Ok(match bt.kind() {
-            1 => Type::Int(Int::from_reader(reader, endianness, bt)?),
-            2 => Type::Ptr(Ptr::new(bt)),
-            3 => Type::Array(Array::from_reader(reader, endianness, bt)?),
-            4 => Type::Struct(Struct::from_reader(reader, endianness, bt)?),
-            5 => Type::Union(Struct::from_reader(reader, endianness, bt)?),
-            6 => Type::Enum(Enum::from_reader(reader, endianness, bt)?),
-            7 => Type::Fwd(Fwd::new(bt)),
-            8 => Type::Typedef(Typedef::new(bt)),
-            9 => Type::Volatile(Volatile::new(bt)),
-            10 => Type::Const(Volatile::new(bt)),
-            11 => Type::Restrict(Volatile::new(bt)),
-            12 => Type::Func(Func::new(bt)),
-            13 => Type::FuncProto(FuncProto::from_reader(reader, endianness, bt)?),
-            14 => Type::Var(Var::from_reader(reader, endianness, bt)?),
-            15 => Type::Datasec(Datasec::from_reader(reader, endianness, bt)?),
-            16 => Type::Float(Float::new(bt)),
-            17 => Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?),
-            18 => Type::TypeTag(Typedef::new(bt)),
-            19 => Type::Enum64(Enum64::from_reader(reader, endianness, bt)?),
-            // We can't ignore unsupported types as we can't guess their
-            // size and thus how much to skip to the next type.
-            x => return Err(Error::Format(format!("Unsupported BTF type ({x})"))),
+        Ok(match BtfKind::from_id(bt.kind())? {
+            BtfKind::Int => Type::Int(Int::from_reader(reader, endianness, bt)?),
+            BtfKind::Ptr => Type::Ptr(Ptr::new(bt)),
+            BtfKind::Array => Type::Array(Array::from_reader(reader, endianness, bt)?),
+            BtfKind::Struct => Type::Struct(Struct::from_reader(reader, endianness, bt)?),
+            BtfKind::Union => Type::Union(Struct::from_reader(reader, endianness, bt)?),
+            BtfKind::Enum => Type::Enum(Enum::from_reader(reader, endianness, bt)?),
+            BtfKind::Fwd => Type::Fwd(Fwd::new(bt)),
+            BtfKind::Typedef => Type::Typedef(Typedef::new(bt)),
+            BtfKind::Volatile => Type::Volatile(Volatile::new(bt)),
+            BtfKind::Const => Type::Const(Volatile::new(bt)),
+            BtfKind::Restrict => Type::Restrict(Volatile::new(bt)),
+            BtfKind::Func => Type::Func(Func::new(bt)),
+            BtfKind::FuncProto => Type::FuncProto(FuncProto::from_reader(reader, endianness, bt)?),
+            BtfKind::Var => Type::Var(Var::from_reader(reader, endianness, bt)?),
+            BtfKind::Datasec => Type::Datasec(Datasec::from_reader(reader, endianness, bt)?),
+            BtfKind::Float => Type::Float(Float::new(bt)),
+            BtfKind::DeclTag => Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?),
+            BtfKind::TypeTag => Type::TypeTag(Typedef::new(bt)),
+            BtfKind::Enum64 => Type::Enum64(Enum64::from_reader(reader, endianness, bt)?),
         })
     }
 
@@ -334,6 +331,59 @@ pub trait BtfType {
 
     fn get_type_id(&self) -> Result<u32> {
         Err(Error::OpNotSupp("No type offset in type".to_string()))
+    }
+}
+
+/// BTF kind.
+/// From include/uapi/linux/btf.h; not expected to be exposed.
+pub(crate) enum BtfKind {
+    Int = 1,
+    Ptr = 2,
+    Array = 3,
+    Struct = 4,
+    Union = 5,
+    Enum = 6,
+    Fwd = 7,
+    Typedef = 8,
+    Volatile = 9,
+    Const = 10,
+    Restrict = 11,
+    Func = 12,
+    FuncProto = 13,
+    Var = 14,
+    Datasec = 15,
+    Float = 16,
+    DeclTag = 17,
+    TypeTag = 18,
+    Enum64 = 19,
+}
+
+impl BtfKind {
+    /// Construct a `BtfKind` from its id.
+    pub(crate) fn from_id(id: u32) -> Result<Self> {
+        use BtfKind::*;
+        Ok(match id {
+            1 => Int,
+            2 => Ptr,
+            3 => Array,
+            4 => Struct,
+            5 => Union,
+            6 => Enum,
+            7 => Fwd,
+            8 => Typedef,
+            9 => Volatile,
+            10 => Const,
+            11 => Restrict,
+            12 => Func,
+            13 => FuncProto,
+            14 => Var,
+            15 => Datasec,
+            16 => Float,
+            17 => DeclTag,
+            18 => TypeTag,
+            19 => Enum64,
+            x => return Err(Error::InvalidType(x)),
+        })
     }
 }
 
