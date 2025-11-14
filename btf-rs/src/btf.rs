@@ -239,38 +239,35 @@ pub enum Type {
 }
 
 impl Type {
+    /// Creates a new Type reading a BTF definition from a reader.
     pub(super) fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         bt: cbtf::btf_type,
     ) -> Result<Self> {
         // Each BTF type needs specific handling to parse its type-specific header.
-        match bt.kind() {
-            1 => Ok(Type::Int(Int::from_reader(reader, endianness, bt)?)),
-            2 => Ok(Type::Ptr(Ptr::new(bt))),
-            3 => Ok(Type::Array(Array::from_reader(reader, endianness, bt)?)),
-            4 => Ok(Type::Struct(Struct::from_reader(reader, endianness, bt)?)),
-            5 => Ok(Type::Union(Struct::from_reader(reader, endianness, bt)?)),
-            6 => Ok(Type::Enum(Enum::from_reader(reader, endianness, bt)?)),
-            7 => Ok(Type::Fwd(Fwd::new(bt))),
-            8 => Ok(Type::Typedef(Typedef::new(bt))),
-            9 => Ok(Type::Volatile(Volatile::new(bt))),
-            10 => Ok(Type::Const(Volatile::new(bt))),
-            11 => Ok(Type::Restrict(Volatile::new(bt))),
-            12 => Ok(Type::Func(Func::new(bt))),
-            13 => Ok(Type::FuncProto(FuncProto::from_reader(
-                reader, endianness, bt,
-            )?)),
-            14 => Ok(Type::Var(Var::from_reader(reader, endianness, bt)?)),
-            15 => Ok(Type::Datasec(Datasec::from_reader(reader, endianness, bt)?)),
-            16 => Ok(Type::Float(Float::new(bt))),
-            17 => Ok(Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?)),
-            18 => Ok(Type::TypeTag(Typedef::new(bt))),
-            19 => Ok(Type::Enum64(Enum64::from_reader(reader, endianness, bt)?)),
-            // We can't ignore unsupported types as we can't guess their
-            // size and thus how much to skip to the next type.
-            x => Err(Error::Format(format!("Unsupported BTF type ({x})"))),
-        }
+        use cbtf::BtfKind;
+        Ok(match BtfKind::from_id(bt.kind())? {
+            BtfKind::Int => Type::Int(Int::from_reader(reader, endianness, bt)?),
+            BtfKind::Ptr => Type::Ptr(Ptr::new(bt)),
+            BtfKind::Array => Type::Array(Array::from_reader(reader, endianness, bt)?),
+            BtfKind::Struct => Type::Struct(Struct::from_reader(reader, endianness, bt)?),
+            BtfKind::Union => Type::Union(Struct::from_reader(reader, endianness, bt)?),
+            BtfKind::Enum => Type::Enum(Enum::from_reader(reader, endianness, bt)?),
+            BtfKind::Fwd => Type::Fwd(Fwd::new(bt)),
+            BtfKind::Typedef => Type::Typedef(Typedef::new(bt)),
+            BtfKind::Volatile => Type::Volatile(Volatile::new(bt)),
+            BtfKind::Const => Type::Const(Volatile::new(bt)),
+            BtfKind::Restrict => Type::Restrict(Volatile::new(bt)),
+            BtfKind::Func => Type::Func(Func::new(bt)),
+            BtfKind::FuncProto => Type::FuncProto(FuncProto::from_reader(reader, endianness, bt)?),
+            BtfKind::Var => Type::Var(Var::from_reader(reader, endianness, bt)?),
+            BtfKind::Datasec => Type::Datasec(Datasec::from_reader(reader, endianness, bt)?),
+            BtfKind::Float => Type::Float(Float::new(bt)),
+            BtfKind::DeclTag => Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?),
+            BtfKind::TypeTag => Type::TypeTag(Typedef::new(bt)),
+            BtfKind::Enum64 => Type::Enum64(Enum64::from_reader(reader, endianness, bt)?),
+        })
     }
 
     /// Creates a new Type reading a BTF definition from bytes.
