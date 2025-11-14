@@ -13,6 +13,9 @@ test_task:
   setup_script:
     - rustup component add rustfmt
     - rustup component add clippy
+  check_script:
+    - cargo fmt --check
+    - cargo clippy -F elf,elf-compression,regex -- -D warnings
   build_script:
     - cargo build --verbose
     - cargo build --verbose -F elf
@@ -22,7 +25,4 @@ test_task:
     - cargo build --verbose -F elf-compression,regex
   test_script:
     - cargo test --verbose -F elf,elf-compression,regex
-  check_script:
-    - cargo fmt --check
-    - cargo clippy -F elf,elf-compression,regex -- -D warnings
   before_cache_script: rm -rf $CARGO_HOME/registry/index
