@@ -815,11 +815,15 @@ impl Var {
     }
 
     pub fn is_static(&self) -> bool {
-        self.btf_var.linkage == 0
+        self.btf_var.linkage == cbtf::BTF_VAR_STATIC
     }
 
     pub fn is_global(&self) -> bool {
-        self.btf_var.linkage == 1
+        self.btf_var.linkage == cbtf::BTF_VAR_GLOBAL_ALLOCATED
+    }
+
+    pub fn is_extern(&self) -> bool {
+        self.btf_var.linkage == cbtf::BTF_VAR_GLOBAL_EXTERN
     }
 }
 

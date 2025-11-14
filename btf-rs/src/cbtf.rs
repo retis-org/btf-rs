@@ -362,6 +362,10 @@ pub(super) struct btf_var {
     pub(super) linkage: u32,
 }
 
+pub(super) const BTF_VAR_STATIC: u32 = 0;
+pub(super) const BTF_VAR_GLOBAL_ALLOCATED: u32 = 1;
+pub(super) const BTF_VAR_GLOBAL_EXTERN: u32 = 2;
+
 #[cbtf_type]
 pub(super) struct btf_var_secinfo {
     pub(super) r#type: u32,
