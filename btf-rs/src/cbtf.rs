@@ -73,6 +73,58 @@ impl Endianness {
     }
 }
 
+// BTF kind, from include/uapi/linux/btf.h.
+pub(super) enum BtfKind {
+    Int = 1,
+    Ptr = 2,
+    Array = 3,
+    Struct = 4,
+    Union = 5,
+    Enum = 6,
+    Fwd = 7,
+    Typedef = 8,
+    Volatile = 9,
+    Const = 10,
+    Restrict = 11,
+    Func = 12,
+    FuncProto = 13,
+    Var = 14,
+    Datasec = 15,
+    Float = 16,
+    DeclTag = 17,
+    TypeTag = 18,
+    Enum64 = 19,
+}
+
+impl BtfKind {
+    // Construct a `BtfKind` from its id.
+    pub(super) fn from_id(id: u32) -> Result<Self> {
+        use BtfKind::*;
+        Ok(match id {
+            1 => Int,
+            2 => Ptr,
+            3 => Array,
+            4 => Struct,
+            5 => Union,
+            6 => Enum,
+            7 => Fwd,
+            8 => Typedef,
+            9 => Volatile,
+            10 => Const,
+            11 => Restrict,
+            12 => Func,
+            13 => FuncProto,
+            14 => Var,
+            15 => Datasec,
+            16 => Float,
+            17 => DeclTag,
+            18 => TypeTag,
+            19 => Enum64,
+            x => return Err(Error::Format(format!("Unsupported BTF type {x}"))),
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
 pub(super) struct btf_header {
