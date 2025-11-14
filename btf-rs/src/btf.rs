@@ -307,7 +307,7 @@ impl Type {
             BtfKind::Datasec => Type::Datasec(Datasec::from_reader(reader, endianness, bt)?),
             BtfKind::Float => Type::Float(Float::new(bt)),
             BtfKind::DeclTag => Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?),
-            BtfKind::TypeTag => Type::TypeTag(Typedef::new(bt)),
+            BtfKind::TypeTag => Type::TypeTag(TypeTag::new(bt)),
             BtfKind::Enum64 => Type::Enum64(Enum64::from_reader(reader, endianness, bt)?),
         })
     }
@@ -674,9 +674,6 @@ impl BtfType for Typedef {
     }
 }
 
-/// Rust representation for BTF type `BTF_KIND_TYPE_TAG`.
-pub type TypeTag = Typedef;
-
 /// Rust representation for BTF type `BTF_KIND_VOLATILE`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Volatile {
@@ -952,6 +949,32 @@ impl DeclTag {
 }
 
 impl BtfType for DeclTag {
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
+    }
+
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
+    }
+}
+
+/// Rust representation for BTF type `BTF_KIND_TYPE_TAG`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypeTag {
+    btf_type: cbtf::btf_type,
+}
+
+impl TypeTag {
+    fn new(btf_type: cbtf::btf_type) -> TypeTag {
+        TypeTag { btf_type }
+    }
+
+    pub fn is_attribute(&self) -> bool {
+        self.btf_type.kind_flag() == 1
+    }
+}
+
+impl BtfType for TypeTag {
     fn get_name_offset(&self) -> Option<u32> {
         self.btf_type.name_offset()
     }
