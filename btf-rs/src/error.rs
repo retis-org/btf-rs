@@ -1,7 +1,10 @@
+//! Errors returned from `btf-rs`.
+
 use thiserror;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Errors returned by the `btf-rs` crate.
 #[non_exhaustive]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
