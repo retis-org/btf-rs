@@ -1,11 +1,21 @@
+//! # ELF helpers
+//!
+//! ELF helpers are provided to parse BTF data from .BTF ELF sections. This is
+//! especially useful for parsing BTF data from kernel modules (e.g.
+//! `/usr/lib/modules/`).
+//!
+//! ELF helpers are under the `elf` feature. Additional support for compressed
+//! ELF files can be enabled with the `elf-compression` feature.
+
 use std::{fs, path::Path};
 
 use elf::{endian::AnyEndian, ElfBytes};
 
 use crate::{utils::collection::BtfCollection, Error, Result};
 
-/// Extract raw BTF data from the .BTF elf section of the given file. Output can
-/// be used to fed `from_bytes` constructors in this library.
+/// Extract raw BTF data from the .BTF ELF section of the given file. Output can
+/// be used to fed [`crate::Btf::from_bytes`] and
+/// [`crate::Btf::from_split_bytes`].
 pub fn extract_btf_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
     #[cfg_attr(not(feature = "elf-compression"), allow(unused_mut))]
     let mut file = fs::read(&path)?;
@@ -45,10 +55,11 @@ pub fn extract_btf_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
     Ok(btf.to_vec())
 }
 
-/// Given a directory containing a 'vmlinux' ELF file in its root and optional
-/// '*.ko' ELF modules in the root or any sub-directory (this maps well to a
-/// Linux build directory or /usr/lib/modules/), initialize a BtfCollection
-/// extracting BTF data from the .BTF section of those files.
+/// Given a directory containing a `vmlinux` ELF file in its root and optional
+/// `*.ko` ELF modules in the root or any sub-directory (this maps well to a
+/// Linux build directory or `/usr/lib/modules/`), initialize a
+/// [`BtfCollection`] extracting BTF data from the .BTF ELF section of those
+/// files.
 pub fn collection_from_kernel_dir<P: AsRef<Path>>(path: P) -> Result<BtfCollection> {
     let path = path.as_ref();
     if !path.is_dir() {
@@ -92,6 +103,7 @@ pub fn collection_from_kernel_dir<P: AsRef<Path>>(path: P) -> Result<BtfCollecti
     Ok(collection)
 }
 
+// Check if a file is a Linux kernel module looking at its extension.
 fn is_module_ext(filename: &str) -> bool {
     #[cfg(feature = "elf-compression")]
     if compression::is_compressed_module_ext(filename) {

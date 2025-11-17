@@ -215,7 +215,7 @@ impl btf_header {
         ))
     }
 
-    /// Estimates the number of strings and types defined in the BTF object.
+    // Estimates the number of strings and types defined in the BTF object.
     pub(super) fn estimates(&self) -> (usize, usize) {
         let strings = self.str_len as usize / 15;
         let types = self.type_len as usize / 22;
@@ -223,7 +223,7 @@ impl btf_header {
     }
 }
 
-/// Skip a BTF type defined in the provided seekable reader.
+// Skip a BTF type defined in the provided seekable reader.
 pub(super) fn btf_skip_type<R: Read + Seek>(reader: &mut R, endianness: &Endianness) -> Result<()> {
     // Skip header::name_off.
     reader.seek(SeekFrom::Current(4))?;

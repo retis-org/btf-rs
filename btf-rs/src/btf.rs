@@ -1,3 +1,6 @@
+//! Main object of the `btf-rs` crate, providing a way to parse BTF data and
+//! helpers to query the information it describes.
+
 #![allow(dead_code)]
 
 use std::{
@@ -35,17 +38,17 @@ pub struct Btf {
 
 impl Btf {
     /// Parse a stand-alone BTF object file and construct a Rust representation
-    /// for later use. By default `Backend::Cache` is used.
+    /// for later use. By default [`Backend::Cache`] is used.
     ///
     /// Trying to open split BTF files using this function will fail. For split
-    /// BTF files use `Btf::from_split_file`.
+    /// BTF files use [`Btf::from_split_file`].
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         Self::from_file_with_backend(&path, Backend::Cache)
     }
 
-    /// Same as `Btf::from_file` but forcing a given `Backend` to be used. This
-    /// allow selecting the desired behavior and balance, but can fail if a
-    /// given `Backend` isn't supported by the underlying system.
+    /// Same as [`Btf::from_file`] but forcing a given [`Backend`] to be used.
+    /// This allows selecting the desired behavior and balance, but can fail if
+    /// a given [`Backend`] isn't supported by the underlying system.
     pub fn from_file_with_backend<P: AsRef<Path>>(path: P, backend: Backend) -> Result<Self> {
         Ok(Btf {
             obj: Arc::new(match backend {
@@ -77,7 +80,8 @@ impl Btf {
         })
     }
 
-    /// Perform the same actions as `Btf::from_file`, but fed with a byte slice.
+    /// Perform the same actions as [`Btf::from_file`], but fed with a byte
+    /// slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes), None)?),
@@ -85,7 +89,8 @@ impl Btf {
         })
     }
 
-    /// Performs the same actions as from_split_file(), but fed with a byte slice.
+    /// Performs the same actions as [`Btf::from_split_file`], but fed with a
+    /// byte slice.
     pub fn from_split_bytes(bytes: &[u8], base: &Btf) -> Result<Btf> {
         if base.base.is_some() {
             return Err(Error::OpNotSupp("Provided base is a split BTF".to_string()));
@@ -115,8 +120,8 @@ impl Btf {
         Ok(ids)
     }
 
-    /// Find a list of BTF ids using their name as a key, using the split BTF
-    /// definition only. For internal use only.
+    // Find a list of BTF ids using their name as a key, using the split BTF
+    // definition only. For internal use only.
     pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
         self.obj.resolve_ids_by_name(name)
     }
@@ -136,8 +141,8 @@ impl Btf {
         Ok(ids)
     }
 
-    /// Find a list of BTF ids whose names match a regex, using the split BTF
-    /// definition only. For internal use only.
+    // Find a list of BTF ids whose names match a regex, using the split BTF
+    // definition only. For internal use only.
     #[cfg(feature = "regex")]
     pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
         self.obj.resolve_ids_by_regex(re)
@@ -168,8 +173,8 @@ impl Btf {
         Ok(types)
     }
 
-    /// Find a list of BTF types using their name as a key, using the split BTF
-    /// definition only. For internal use only.
+    // Find a list of BTF types using their name as a key, using the split BTF
+    // definition only. For internal use only.
     pub(crate) fn resolve_split_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         self.obj.resolve_types_by_name(name)
     }
@@ -189,8 +194,8 @@ impl Btf {
         Ok(types)
     }
 
-    /// Find a list of BTF types using a regex describing their name as a key,
-    /// using the split BTF definition only. For internal use only.
+    // Find a list of BTF types using a regex describing their name as a key,
+    // using the split BTF definition only. For internal use only.
     #[cfg(feature = "regex")]
     pub(crate) fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         self.obj.resolve_types_by_regex(re)
@@ -219,7 +224,7 @@ impl Btf {
 
     /// This helper returns an iterator that allow to resolve a Type
     /// referenced in another one all the way down to the chain.
-    /// The helper makes use of `Btf::resolve_chained_type()`.
+    /// The helper makes use of [`Btf::resolve_chained_type`].
     pub fn type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> TypeIter<'_> {
         TypeIter {
             btf: self,
@@ -228,13 +233,13 @@ impl Btf {
     }
 }
 
-/// Iterator type returned by `Btf::type_iter()`.
+/// Iterator type returned by [`Btf::type_iter`].
 pub struct TypeIter<'a> {
     btf: &'a Btf,
     r#type: Option<Type>,
 }
 
-/// Iterator for `Btf::TypeIter`.
+/// Iterator for [`TypeIter`].
 impl Iterator for TypeIter<'_> {
     type Item = Type;
 
@@ -282,7 +287,7 @@ pub enum Type {
 }
 
 impl Type {
-    /// Creates a new Type reading a BTF definition from a reader.
+    // Creates a new Type reading a BTF definition from a reader.
     pub(super) fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
@@ -313,7 +318,7 @@ impl Type {
         })
     }
 
-    /// Creates a new Type reading a BTF definition from bytes.
+    // Creates a new Type reading a BTF definition from bytes.
     pub(crate) fn from_bytes(
         buf: &[u8],
         endianness: &cbtf::Endianness,
@@ -322,6 +327,7 @@ impl Type {
         Self::from_reader(&mut Cursor::new(buf), endianness, bt)
     }
 
+    /// Returns an `str` representation of the [`Type`].
     pub fn name(&self) -> &'static str {
         match &self {
             Type::Void => "void",
@@ -372,11 +378,14 @@ impl Type {
     }
 }
 
+/// Helpers common to all BTF types. Ease the use of types.
 pub trait BtfType {
+    /// Returns the offset of the string associated with the type, if any.
     fn get_name_offset(&self) -> Option<u32> {
         None
     }
 
+    /// Returns the type id associated with the current type, if any.
     fn get_type_id(&self) -> Option<u32> {
         None
     }
@@ -462,6 +471,7 @@ impl Array {
         })
     }
 
+    /// Number of elements in the `Array`.
     pub fn len(&self) -> usize {
         self.btf_array.nelems as usize
     }
@@ -477,6 +487,7 @@ impl BtfType for Array {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Struct {
     btf_type: cbtf::btf_type,
+    /// The members information. Use `.len()` to count them.
     pub members: Vec<Member>,
 }
 
@@ -563,6 +574,7 @@ impl BtfType for Member {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Enum {
     btf_type: cbtf::btf_type,
+    /// The enum members information. Use `.len()` to count them.
     pub members: Vec<EnumMember>,
 }
 
@@ -989,6 +1001,7 @@ impl BtfType for TypeTag {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Enum64 {
     btf_type: cbtf::btf_type,
+    /// The enum members information. Use `.len()` to count them.
     pub members: Vec<Enum64Member>,
 }
 

@@ -11,7 +11,7 @@ use memmap2::Mmap;
 
 use crate::{btf::*, cbtf, Error, Result};
 
-/// Main internal representation of a parsed BTF object.
+// Main internal representation of a parsed BTF object.
 pub(super) struct BtfObj(Box<dyn BtfBackend + Send + Sync>);
 
 // Allow using `BtfBackend` helpers on `BtfObj`.
@@ -24,15 +24,15 @@ impl Deref for BtfObj {
 }
 
 impl BtfObj {
-    /// Parse a BTF object from a mmaped file. This takes the `Mmap` ownership
-    /// to allow reading the BTF data on-demand. This provides a faster
-    /// initialization and a lower memory footprint than `Self::from_reader`.
+    // Parse a BTF object from a mmaped file. This takes the `Mmap` ownership to
+    // allow reading the BTF data on-demand. This provides a faster
+    // initialization and a lower memory footprint than `Self::from_reader`.
     pub(super) fn from_mmap(mmap: Mmap, base: Option<Arc<BtfObj>>) -> Result<Self> {
         Ok(Self(Box::new(MmapBtfObj::new(mmap, base)?)))
     }
 
-    /// Parse a BTF object from a Reader. The BTF data is cached in memory. This
-    /// provides faster API access than `Self::from_mmap`.
+    // Parse a BTF object from a Reader. The BTF data is cached in memory. This
+    // provides faster API access than `Self::from_mmap`.
     pub(super) fn from_reader<R: Seek + BufRead>(
         reader: &mut R,
         base: Option<Arc<BtfObj>>,
@@ -40,7 +40,7 @@ impl BtfObj {
         Ok(Self(Box::new(CachedBtfObj::new(reader, base)?)))
     }
 
-    /// Find a list of BTF types using their name as a key.
+    // Find a list of BTF types using their name as a key.
     pub(super) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         let mut types = Vec::new();
         self.resolve_ids_by_name(name)?
@@ -55,8 +55,8 @@ impl BtfObj {
         Ok(types)
     }
 
-    /// Resolve a name referenced by a Type which is defined in the current BTF
-    /// object.
+    // Resolve a name referenced by a Type which is defined in the current BTF
+    // object.
     pub(super) fn resolve_name(&self, r#type: &dyn BtfType) -> Result<String> {
         let offset = r#type
             .get_name_offset()
@@ -65,7 +65,7 @@ impl BtfObj {
             .ok_or(Error::InvalidString(offset))
     }
 
-    /// Find a list of BTF types using a regex describing their name as a key.
+    // Find a list of BTF types using a regex describing their name as a key.
     #[cfg(feature = "regex")]
     pub(super) fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         let mut types = Vec::new();
@@ -82,27 +82,27 @@ impl BtfObj {
     }
 }
 
-/// Helpers implemented by BTF backends to allow querying the BTF definitions
-/// (types, names, etc).
+// Helpers implemented by BTF backends to allow querying the BTF definitions
+// (types, names, etc).
 pub(super) trait BtfBackend {
-    /// Access the BTF header as a reference.
+    // Access the BTF header as a reference.
     fn header(&self) -> &cbtf::btf_header;
-    /// Return the number of types in the object.
+    // Return the number of types in the object.
     fn types(&self) -> usize;
-    /// Find a list of BTF ids using their name as a key.
+    // Find a list of BTF ids using their name as a key.
     fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>>;
-    /// Find a BTF type using its id as a key.
+    // Find a BTF type using its id as a key.
     fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>>;
-    /// Resolve a name using its offset.
+    // Resolve a name using its offset.
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String>;
-    /// Find a list of BTF ids whose names match a regex.
+    // Find a list of BTF ids whose names match a regex.
     #[cfg(feature = "regex")]
     fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>>;
 }
 
-/// Backend for a parsed BTF object with all its types and strings cached in
-/// memory. This provides faster API performances at the cost of slower
-/// initialization and increase in memory footprint.
+// Backend for a parsed BTF object with all its types and strings cached in
+// memory. This provides faster API performances at the cost of slower
+// initialization and increase in memory footprint.
 struct CachedBtfObj {
     header: cbtf::btf_header,
     // Type id offset from the base, 0 if not.
@@ -253,9 +253,9 @@ impl BtfBackend for CachedBtfObj {
     }
 }
 
-/// Backend for a parsed BTF object keeping the input data memory-mapped. This
-/// provides a faster initialization and lower memory footprint at the cost of
-/// slower API performances.
+// Backend for a parsed BTF object keeping the input data memory-mapped. This
+// provides a faster initialization and lower memory footprint at the cost of
+// slower API performances.
 struct MmapBtfObj {
     endianness: cbtf::Endianness,
     header: cbtf::btf_header,
