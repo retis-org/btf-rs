@@ -4,9 +4,12 @@ use std::{
     convert::AsRef,
     fs::File,
     io::{BufReader, Cursor, Read},
+    mem,
     path::Path,
     sync::Arc,
 };
+
+use memmap2::MmapOptions;
 
 use crate::{cbtf, obj::BtfObj, Error, Result};
 
@@ -18,10 +21,20 @@ pub struct Btf {
 }
 
 impl Btf {
-    /// Parse a stand-alone BTF object file and construct a Rust representation for later
-    /// use. Trying to open split BTF files using this function will fail. For split BTF
-    /// files use `Btf::from_split_file()`.
+    /// Parse a stand-alone BTF object file and construct a Rust representation
+    /// for later use. The input file will be mmaped if supported, otherwise the
+    /// BTF data will be cached in memory. See `Btf::mmap_from_file` and
+    /// `Btf::cache_from_file`.
+    ///
+    /// Trying to open split BTF files using this function will fail. For split
+    /// BTF files use `Btf::from_split_file`.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
+        Self::mmap_from_file(&path).or_else(|_| Self::cache_from_file(&path))
+    }
+
+    /// Perform the same actions as `Btf::from_file` but force caching the BTF
+    /// data in memory for faster API performances.
+    pub fn cache_from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(
                 &mut BufReader::new(File::open(path)?),
@@ -31,14 +44,23 @@ impl Btf {
         })
     }
 
+    /// Perform the same actions as `Btf::from_file` but force mmaping the BTF
+    /// data in memory for a faster initialization and a lower memory footprint.
+    pub fn mmap_from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
+        Ok(Btf {
+            obj: Arc::new(BtfObj::from_mmap(
+                unsafe { MmapOptions::new().map_copy_read_only(&File::open(path)?)? },
+                None,
+            )?),
+            base: None,
+        })
+    }
+
     /// Parse a split BTF object file and construct a Rust representation for later
     /// use. A base Btf object must be provided.
     pub fn from_split_file<P: AsRef<Path>>(path: P, base: &Btf) -> Result<Btf> {
-        if !path.as_ref().is_file() {
-            return Err(Error::Format(format!(
-                "Invalid BTF file {}",
-                path.as_ref().display()
-            )));
+        if base.base.is_some() {
+            return Err(Error::OpNotSupp("Provided base is a split BTF".to_string()));
         }
 
         Ok(Btf {
@@ -50,7 +72,7 @@ impl Btf {
         })
     }
 
-    /// Performs the same actions as from_file(), but fed with a byte slice.
+    /// Perform the same actions as `Btf::from_file`, but fed with a byte slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes), None)?),
@@ -60,6 +82,10 @@ impl Btf {
 
     /// Performs the same actions as from_split_file(), but fed with a byte slice.
     pub fn from_split_bytes(bytes: &[u8], base: &Btf) -> Result<Btf> {
+        if base.base.is_some() {
+            return Err(Error::OpNotSupp("Provided base is a split BTF".to_string()));
+        }
+
         let base = base.obj.clone();
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(
@@ -71,49 +97,50 @@ impl Btf {
     }
 
     /// Find a list of BTF ids using their name as a key.
-    pub fn resolve_ids_by_name(&self, name: &str) -> Vec<u32> {
-        let mut ids = self.resolve_split_ids_by_name(name);
+    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        let mut ids = self.resolve_split_ids_by_name(name)?;
 
         if let Some(base) = &self.base {
-            ids.append(&mut base.resolve_ids_by_name(name));
+            ids.append(&mut base.resolve_ids_by_name(name)?);
         }
 
-        ids
+        Ok(ids)
     }
 
     /// Find a list of BTF ids using their name as a key, using the split BTF
     /// definition only. For internal use only.
-    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Vec<u32> {
+    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
         self.obj.resolve_ids_by_name(name)
     }
 
     /// Find a list of BTF ids whose names match a regex.
     #[cfg(feature = "regex")]
-    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
-        let mut ids = self.resolve_split_ids_by_regex(re);
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        let mut ids = self.resolve_split_ids_by_regex(re)?;
 
         if let Some(base) = &self.base {
-            ids.append(&mut base.resolve_ids_by_regex(re));
+            ids.append(&mut base.resolve_ids_by_regex(re)?);
         }
 
-        ids
+        Ok(ids)
     }
 
     /// Find a list of BTF ids whose names match a regex, using the split BTF
     /// definition only. For internal use only.
     #[cfg(feature = "regex")]
-    pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
+    pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
         self.obj.resolve_ids_by_regex(re)
     }
 
     /// Find a BTF type using its id as a key.
-    pub fn resolve_type_by_id(&self, id: u32) -> Option<Type> {
-        match &self.base {
-            Some(base) => base
-                .resolve_type_by_id(id)
-                .or_else(|| self.obj.resolve_type_by_id(id)),
-            None => self.obj.resolve_type_by_id(id),
+    pub fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
+        if let Some(base) = &self.base {
+            if let Some(r#type) = base.resolve_type_by_id(id)? {
+                return Ok(Some(r#type));
+            }
         }
+
+        self.obj.resolve_type_by_id(id)
     }
 
     /// Find a list of BTF types using their name as a key.
@@ -148,13 +175,13 @@ impl Btf {
     /// Find a list of BTF types using a regex describing their name as a key,
     /// using the split BTF definition only. For internal use only.
     #[cfg(feature = "regex")]
-    pub fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+    pub(crate) fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         self.obj.resolve_types_by_regex(re)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
-    pub fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
+    pub fn resolve_name(&self, r#type: &dyn BtfType) -> Result<String> {
         match &self.base {
             Some(base) => base
                 .resolve_name(r#type)
@@ -168,7 +195,7 @@ impl Btf {
     /// to traverse the Type tree.
     pub fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
         let id = r#type.get_type_id()?;
-        self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
+        self.resolve_type_by_id(id)?.ok_or(Error::InvalidType(id))
     }
 
     /// This helper returns an iterator that allow to resolve a Type
@@ -235,6 +262,43 @@ pub enum Type {
 }
 
 impl Type {
+    /// Creates a new Type reading a BTF definition from a reader.
+    pub(crate) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+    ) -> Result<Self> {
+        let bt = cbtf::btf_type::from_reader(reader, endianness)?;
+
+        // Each BTF type needs specific handling to parse its type-specific
+        // header.
+        Ok(match BtfKind::from_id(bt.kind())? {
+            BtfKind::Int => Type::Int(Int::from_reader(reader, endianness, bt)?),
+            BtfKind::Ptr => Type::Ptr(Ptr::new(bt)),
+            BtfKind::Array => Type::Array(Array::from_reader(reader, endianness, bt)?),
+            BtfKind::Struct => Type::Struct(Struct::from_reader(reader, endianness, bt)?),
+            BtfKind::Union => Type::Union(Struct::from_reader(reader, endianness, bt)?),
+            BtfKind::Enum => Type::Enum(Enum::from_reader(reader, endianness, bt)?),
+            BtfKind::Fwd => Type::Fwd(Fwd::new(bt)),
+            BtfKind::Typedef => Type::Typedef(Typedef::new(bt)),
+            BtfKind::Volatile => Type::Volatile(Volatile::new(bt)),
+            BtfKind::Const => Type::Const(Volatile::new(bt)),
+            BtfKind::Restrict => Type::Restrict(Volatile::new(bt)),
+            BtfKind::Func => Type::Func(Func::new(bt)),
+            BtfKind::FuncProto => Type::FuncProto(FuncProto::from_reader(reader, endianness, bt)?),
+            BtfKind::Var => Type::Var(Var::from_reader(reader, endianness, bt)?),
+            BtfKind::Datasec => Type::Datasec(Datasec::from_reader(reader, endianness, bt)?),
+            BtfKind::Float => Type::Float(Float::new(bt)),
+            BtfKind::DeclTag => Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?),
+            BtfKind::TypeTag => Type::TypeTag(Typedef::new(bt)),
+            BtfKind::Enum64 => Type::Enum64(Enum64::from_reader(reader, endianness, bt)?),
+        })
+    }
+
+    /// Creates a new Type reading a BTF definition from bytes.
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<Self> {
+        Self::from_reader(&mut Cursor::new(buf), endianness)
+    }
+
     pub fn name(&self) -> &'static str {
         match &self {
             Type::Void => "void",
@@ -295,6 +359,76 @@ pub trait BtfType {
     }
 }
 
+/// BTF kind.
+/// From include/uapi/linux/btf.h; not expected to be exposed.
+pub(crate) enum BtfKind {
+    Int = 1,
+    Ptr = 2,
+    Array = 3,
+    Struct = 4,
+    Union = 5,
+    Enum = 6,
+    Fwd = 7,
+    Typedef = 8,
+    Volatile = 9,
+    Const = 10,
+    Restrict = 11,
+    Func = 12,
+    FuncProto = 13,
+    Var = 14,
+    Datasec = 15,
+    Float = 16,
+    DeclTag = 17,
+    TypeTag = 18,
+    Enum64 = 19,
+}
+
+impl BtfKind {
+    /// Construct a `BtfKind` from its id.
+    pub(crate) fn from_id(id: u32) -> Result<Self> {
+        use BtfKind::*;
+        Ok(match id {
+            1 => Int,
+            2 => Ptr,
+            3 => Array,
+            4 => Struct,
+            5 => Union,
+            6 => Enum,
+            7 => Fwd,
+            8 => Typedef,
+            9 => Volatile,
+            10 => Const,
+            11 => Restrict,
+            12 => Func,
+            13 => FuncProto,
+            14 => Var,
+            15 => Datasec,
+            16 => Float,
+            17 => DeclTag,
+            18 => TypeTag,
+            19 => Enum64,
+            x => return Err(Error::InvalidType(x)),
+        })
+    }
+
+    pub(crate) fn size(&self, vlen: usize) -> usize {
+        use BtfKind::*;
+        mem::size_of::<cbtf::btf_type>()
+            + match self {
+                Ptr | Fwd | Typedef | Volatile | Const | Restrict | Func | Float | TypeTag => 0,
+                Int => mem::size_of::<cbtf::btf_int>(),
+                Array => mem::size_of::<cbtf::btf_array>(),
+                Struct | Union => vlen * mem::size_of::<cbtf::btf_member>(),
+                Enum => vlen * mem::size_of::<cbtf::btf_enum>(),
+                FuncProto => vlen * mem::size_of::<cbtf::btf_param>(),
+                Var => mem::size_of::<cbtf::btf_var>(),
+                Datasec => vlen * mem::size_of::<cbtf::btf_var_secinfo>(),
+                DeclTag => mem::size_of::<cbtf::btf_decl_tag>(),
+                Enum64 => vlen * mem::size_of::<cbtf::btf_enum64>(),
+            }
+    }
+}
+
 /// Rust representation for BTF type `BTF_KIND_INT`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Int {
@@ -303,7 +437,18 @@ pub struct Int {
 }
 
 impl Int {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Int> {
+        Ok(Int {
+            btf_type,
+            btf_int: cbtf::btf_int::from_bytes(buf, endianness)?,
+        })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -364,7 +509,18 @@ pub struct Array {
 
 #[allow(clippy::len_without_is_empty)]
 impl Array {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Array> {
+        Ok(Array {
+            btf_type,
+            btf_array: cbtf::btf_array::from_bytes(buf, endianness)?,
+        })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -394,7 +550,25 @@ pub struct Struct {
 }
 
 impl Struct {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Struct> {
+        let mut members = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            members.push(Member::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_member>())..],
+                endianness,
+                btf_type.kind_flag(),
+            )?);
+        }
+
+        Ok(Struct { btf_type, members })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -434,7 +608,18 @@ pub struct Member {
 }
 
 impl Member {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        kind_flag: u32,
+    ) -> Result<Member> {
+        Ok(Member {
+            kind_flag,
+            btf_member: cbtf::btf_member::from_bytes(buf, endianness)?,
+        })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         kind_flag: u32,
@@ -479,7 +664,24 @@ pub struct Enum {
 
 #[allow(clippy::len_without_is_empty)]
 impl Enum {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Enum> {
+        let mut members = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            members.push(EnumMember::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_enum>())..],
+                endianness,
+            )?);
+        }
+
+        Ok(Enum { btf_type, members })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -519,10 +721,13 @@ pub struct EnumMember {
 }
 
 impl EnumMember {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<EnumMember> {
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<EnumMember> {
+        Ok(EnumMember {
+            btf_enum: cbtf::btf_enum::from_bytes(buf, endianness)?,
+        })
+    }
+
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<EnumMember> {
         Ok(EnumMember {
             btf_enum: cbtf::btf_enum::from_reader(reader, endianness)?,
         })
@@ -658,7 +863,27 @@ pub struct FuncProto {
 }
 
 impl FuncProto {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<FuncProto> {
+        let mut parameters = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            parameters.push(Parameter::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_param>())..],
+                endianness,
+            )?);
+        }
+
+        Ok(FuncProto {
+            btf_type,
+            parameters,
+        })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -687,10 +912,13 @@ pub struct Parameter {
 }
 
 impl Parameter {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<Parameter> {
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<Parameter> {
+        Ok(Parameter {
+            btf_param: cbtf::btf_param::from_bytes(buf, endianness)?,
+        })
+    }
+
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<Parameter> {
         Ok(Parameter {
             btf_param: cbtf::btf_param::from_reader(reader, endianness)?,
         })
@@ -719,7 +947,18 @@ pub struct Var {
 }
 
 impl Var {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Var> {
+        Ok(Var {
+            btf_type,
+            btf_var: cbtf::btf_var::from_bytes(buf, endianness)?,
+        })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -757,7 +996,27 @@ pub struct Datasec {
 }
 
 impl Datasec {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Datasec> {
+        let mut variables = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            variables.push(VarSecinfo::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_var_secinfo>())..],
+                endianness,
+            )?);
+        }
+
+        Ok(Datasec {
+            btf_type,
+            variables,
+        })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -788,10 +1047,13 @@ pub struct VarSecinfo {
 }
 
 impl VarSecinfo {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<VarSecinfo> {
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<VarSecinfo> {
+        Ok(VarSecinfo {
+            btf_var_secinfo: cbtf::btf_var_secinfo::from_bytes(buf, endianness)?,
+        })
+    }
+
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<VarSecinfo> {
         Ok(VarSecinfo {
             btf_var_secinfo: cbtf::btf_var_secinfo::from_reader(reader, endianness)?,
         })
@@ -842,7 +1104,18 @@ pub struct DeclTag {
 }
 
 impl DeclTag {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<DeclTag> {
+        Ok(DeclTag {
+            btf_type,
+            btf_decl_tag: cbtf::btf_decl_tag::from_bytes(buf, endianness)?,
+        })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -881,7 +1154,24 @@ pub struct Enum64 {
 
 #[allow(clippy::len_without_is_empty)]
 impl Enum64 {
-    pub(super) fn from_reader<R: Read>(
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        btf_type: cbtf::btf_type,
+    ) -> Result<Enum64> {
+        let mut members = Vec::new();
+
+        for i in 0..btf_type.vlen() as usize {
+            members.push(Enum64Member::from_bytes(
+                &buf[(i * mem::size_of::<cbtf::btf_enum64>())..],
+                endianness,
+            )?);
+        }
+
+        Ok(Enum64 { btf_type, members })
+    }
+
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -921,6 +1211,12 @@ pub struct Enum64Member {
 }
 
 impl Enum64Member {
+    pub(crate) fn from_bytes(buf: &[u8], endianness: &cbtf::Endianness) -> Result<Enum64Member> {
+        Ok(Enum64Member {
+            btf_enum64: cbtf::btf_enum64::from_bytes(buf, endianness)?,
+        })
+    }
+
     pub(super) fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
