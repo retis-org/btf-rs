@@ -256,6 +256,7 @@ impl Iterator for TypeIter<'_> {
 
 /// Rust representation of BTF types. Each type then contains its own specific
 /// data and provides helpers to access it.
+#[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Void,
