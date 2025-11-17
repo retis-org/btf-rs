@@ -26,7 +26,7 @@
 //! [`BtfCollection::resolve_types_by_name`].
 use std::{fs, ops::Deref, path::Path};
 
-use crate::{Btf, Error, Result, Type};
+use crate::{Backend, Btf, Error, Result, Type};
 
 /// BtfCollection provides a full system BTF view, by combining a base BTF
 /// information with multiple split BTFs.
@@ -64,7 +64,9 @@ impl Deref for NamedBtf {
 }
 
 impl BtfCollection {
-    /// Construct a BtfCollection object from a base BTF file only.
+    /// Construct a [`BtfCollection`] object from a base BTF file only. See
+    /// [`Btf::from_file`] for documentation on which [`Backend`] is used by
+    /// default.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<BtfCollection> {
         Ok(BtfCollection {
             base: NamedBtf {
@@ -75,7 +77,23 @@ impl BtfCollection {
         })
     }
 
-    /// Construct a BtfCollection object from a base BTF file only.
+    /// Same as [`BtfCollection::from_file`] but forcing a given [`Backend`] to
+    /// be used. This allows selecting the desired behavior and balance, but can
+    /// fail if a given [`Backend`] isn't supported by the underlying system.
+    pub fn from_file_with_backend<P: AsRef<Path>>(
+        path: P,
+        backend: Backend,
+    ) -> Result<BtfCollection> {
+        Ok(BtfCollection {
+            base: NamedBtf {
+                name: Self::file_name(path.as_ref())?,
+                btf: Btf::from_file_with_backend(path, backend)?,
+            },
+            split: Vec::new(),
+        })
+    }
+
+    /// Construct a [`BtfCollection`] object from a base BTF file only.
     pub fn from_bytes(name: &str, bytes: &[u8]) -> Result<BtfCollection> {
         Ok(BtfCollection {
             base: NamedBtf {
@@ -123,10 +141,26 @@ impl BtfCollection {
     /// object, given a path to the directory and the filename of the base BTF file.
     /// This is helpful for parsing /sys/kernel/btf for example.
     pub fn from_dir<P: AsRef<Path>>(dir: P, base: &str) -> Result<BtfCollection> {
-        // First parse the base BTF information.
         let mut sys_btf = BtfCollection::from_file(format!("{}/{base}", dir.as_ref().display()))?;
+        sys_btf.add_split_from_dir(dir, base)?;
+        Ok(sys_btf)
+    }
 
-        // Then loop over all split BTF files and parse them.
+    /// Same as [`BtfCollection::from_dir`] but forcing a given [`Backend`] to
+    /// be used. This allows selecting the desired behavior and balance, but can
+    /// fail if a given [`Backend`] isn't supported by the underlying system.
+    pub fn from_dir_with_backend<P: AsRef<Path>>(
+        dir: P,
+        base: &str,
+        backend: Backend,
+    ) -> Result<BtfCollection> {
+        let mut sys_btf =
+            Self::from_file_with_backend(format!("{}/{base}", dir.as_ref().display()), backend)?;
+        sys_btf.add_split_from_dir(dir, base)?;
+        Ok(sys_btf)
+    }
+
+    fn add_split_from_dir<P: AsRef<Path>>(&mut self, dir: P, base: &str) -> Result<()> {
         for file in fs::read_dir(dir.as_ref())? {
             match file {
                 Ok(file) => {
@@ -135,15 +169,14 @@ impl BtfCollection {
                     }
                     if let Ok(ft) = file.file_type() {
                         if !ft.is_dir() {
-                            sys_btf.add_split_btf_from_file(file.path())?;
+                            self.add_split_btf_from_file(file.path())?;
                         }
                     }
                 }
                 Err(e) => return Err(Error::IO(e)),
             }
         }
-
-        Ok(sys_btf)
+        Ok(())
     }
 
     /// Get a reference to a `NamedBtf` given a module name. This `NamedBtf` can

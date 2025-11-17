@@ -813,6 +813,28 @@ fn btfc_files() -> utils::collection::BtfCollection {
     btfc
 }
 
+fn btfc_files_cache() -> utils::collection::BtfCollection {
+    let mut btfc = utils::collection::BtfCollection::from_file_with_backend(
+        "tests/assets/btf/vmlinux",
+        Backend::Cache,
+    )
+    .unwrap();
+    btfc.add_split_btf_from_file("tests/assets/btf/openvswitch")
+        .unwrap();
+    btfc
+}
+
+fn btfc_files_mmap() -> utils::collection::BtfCollection {
+    let mut btfc = utils::collection::BtfCollection::from_file_with_backend(
+        "tests/assets/btf/vmlinux",
+        Backend::Mmap,
+    )
+    .unwrap();
+    btfc.add_split_btf_from_file("tests/assets/btf/openvswitch")
+        .unwrap();
+    btfc
+}
+
 fn btfc_bytes() -> utils::collection::BtfCollection {
     let mut btfc = utils::collection::BtfCollection::from_bytes(
         "vmlinux",
@@ -831,6 +853,24 @@ fn btfc_dir() -> utils::collection::BtfCollection {
     utils::collection::BtfCollection::from_dir("tests/assets/btf", "vmlinux").unwrap()
 }
 
+fn btfc_dir_cache() -> utils::collection::BtfCollection {
+    utils::collection::BtfCollection::from_dir_with_backend(
+        "tests/assets/btf",
+        "vmlinux",
+        Backend::Cache,
+    )
+    .unwrap()
+}
+
+fn btfc_dir_mmap() -> utils::collection::BtfCollection {
+    utils::collection::BtfCollection::from_dir_with_backend(
+        "tests/assets/btf",
+        "vmlinux",
+        Backend::Mmap,
+    )
+    .unwrap()
+}
+
 #[cfg(feature = "elf")]
 fn btfc_elf() -> utils::collection::BtfCollection {
     utils::elf::collection_from_kernel_dir("tests/assets/elf/uncompressed").unwrap()
@@ -842,8 +882,12 @@ fn btfc_compressed_elf(alg: &str) -> utils::collection::BtfCollection {
 }
 
 #[test_case(btfc_files())]
+#[test_case(btfc_files_cache())]
+#[test_case(btfc_files_mmap())]
 #[test_case(btfc_bytes())]
 #[test_case(btfc_dir())]
+#[test_case(btfc_dir_cache())]
+#[test_case(btfc_dir_mmap())]
 #[cfg_attr(feature = "elf", test_case(btfc_elf()))]
 #[cfg_attr(
     feature = "elf-compression",
@@ -916,8 +960,12 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 }
 
 #[test_case(btfc_files())]
+#[test_case(btfc_files_cache())]
+#[test_case(btfc_files_mmap())]
 #[test_case(btfc_bytes())]
 #[test_case(btfc_dir())]
+#[test_case(btfc_dir_cache())]
+#[test_case(btfc_dir_mmap())]
 #[cfg_attr(feature = "elf", test_case(btfc_elf()))]
 #[cfg_attr(
     feature = "elf-compression",
