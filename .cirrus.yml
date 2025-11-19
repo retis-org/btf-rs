@@ -16,6 +16,8 @@ test_task:
   check_script:
     - cargo fmt --check
     - cargo clippy --all-features -- -D warnings
+  benchmark_script:
+    - cargo clippy --all-features --example benchmark -- -D warnings
   build_script:
     - cargo build --verbose
     - cargo build --verbose -F elf
