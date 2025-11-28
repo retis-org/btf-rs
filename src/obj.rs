@@ -90,33 +90,7 @@ impl BtfObj {
 
             // Each BTF type needs specific handling to parse its type-specific
             // header.
-            types.insert(
-                id,
-                match bt.kind() {
-                    1 => Type::Int(Int::from_reader(reader, &endianness, bt)?),
-                    2 => Type::Ptr(Ptr::new(bt)),
-                    3 => Type::Array(Array::from_reader(reader, &endianness, bt)?),
-                    4 => Type::Struct(Struct::from_reader(reader, &endianness, bt)?),
-                    5 => Type::Union(Struct::from_reader(reader, &endianness, bt)?),
-                    6 => Type::Enum(Enum::from_reader(reader, &endianness, bt)?),
-                    7 => Type::Fwd(Fwd::new(bt)),
-                    8 => Type::Typedef(Typedef::new(bt)),
-                    9 => Type::Volatile(Volatile::new(bt)),
-                    10 => Type::Const(Volatile::new(bt)),
-                    11 => Type::Restrict(Volatile::new(bt)),
-                    12 => Type::Func(Func::new(bt)),
-                    13 => Type::FuncProto(FuncProto::from_reader(reader, &endianness, bt)?),
-                    14 => Type::Var(Var::from_reader(reader, &endianness, bt)?),
-                    15 => Type::Datasec(Datasec::from_reader(reader, &endianness, bt)?),
-                    16 => Type::Float(Float::new(bt)),
-                    17 => Type::DeclTag(DeclTag::from_reader(reader, &endianness, bt)?),
-                    18 => Type::TypeTag(Typedef::new(bt)),
-                    19 => Type::Enum64(Enum64::from_reader(reader, &endianness, bt)?),
-                    // We can't ignore unsupported types as we can't guess their
-                    // size and thus how much to skip to the next type.
-                    x => return Err(Error::Format(format!("Unsupported BTF type ({x})"))),
-                },
-            );
+            types.insert(id, Type::from_reader(reader, &endianness, bt)?);
 
             if bt.name_off > 0 {
                 let name_off = bt.name_off;

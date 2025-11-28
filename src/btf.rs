@@ -235,6 +235,40 @@ pub enum Type {
 }
 
 impl Type {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        bt: cbtf::btf_type,
+    ) -> Result<Self> {
+        // Each BTF type needs specific handling to parse its type-specific header.
+        match bt.kind() {
+            1 => Ok(Type::Int(Int::from_reader(reader, endianness, bt)?)),
+            2 => Ok(Type::Ptr(Ptr::new(bt))),
+            3 => Ok(Type::Array(Array::from_reader(reader, endianness, bt)?)),
+            4 => Ok(Type::Struct(Struct::from_reader(reader, endianness, bt)?)),
+            5 => Ok(Type::Union(Struct::from_reader(reader, endianness, bt)?)),
+            6 => Ok(Type::Enum(Enum::from_reader(reader, endianness, bt)?)),
+            7 => Ok(Type::Fwd(Fwd::new(bt))),
+            8 => Ok(Type::Typedef(Typedef::new(bt))),
+            9 => Ok(Type::Volatile(Volatile::new(bt))),
+            10 => Ok(Type::Const(Volatile::new(bt))),
+            11 => Ok(Type::Restrict(Volatile::new(bt))),
+            12 => Ok(Type::Func(Func::new(bt))),
+            13 => Ok(Type::FuncProto(FuncProto::from_reader(
+                reader, endianness, bt,
+            )?)),
+            14 => Ok(Type::Var(Var::from_reader(reader, endianness, bt)?)),
+            15 => Ok(Type::Datasec(Datasec::from_reader(reader, endianness, bt)?)),
+            16 => Ok(Type::Float(Float::new(bt))),
+            17 => Ok(Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?)),
+            18 => Ok(Type::TypeTag(Typedef::new(bt))),
+            19 => Ok(Type::Enum64(Enum64::from_reader(reader, endianness, bt)?)),
+            // We can't ignore unsupported types as we can't guess their
+            // size and thus how much to skip to the next type.
+            x => Err(Error::Format(format!("Unsupported BTF type ({x})"))),
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match &self {
             Type::Void => "void",
