@@ -133,6 +133,54 @@ fn resolve_ids_by_name(btf: Btf) {
     feature = "elf-compression",
     test_case(split_compressed_elf("zstd+zstd", "zst"))
 )]
+fn resolve_anon_types(btf: Btf) {
+    let anon_types = btf.resolve_types_by_name(ANON_TYPE_NAME).unwrap();
+    assert_ne!(anon_types.len(), 0);
+    // Find an anonymous enumerator that contains the IPPROTO_IP member.
+    let sock_protos = anon_types.iter().find(|t| match t {
+        Type::Enum(e) => e
+            .members
+            .iter()
+            .any(|m| btf.resolve_name(m).is_ok_and(|v| v == "IPPROTO_IP")),
+        _ => false,
+    });
+    assert!(sock_protos.is_some());
+    if let Type::Enum(e) = sock_protos.unwrap() {
+        assert_eq!(
+            btf.resolve_name(e).expect("resolve name failed"),
+            ANON_TYPE_NAME.to_string()
+        );
+    } else {
+        panic!("not an enum");
+    }
+}
+
+#[test_case(bytes())]
+#[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
+#[test_case(split_file())]
+#[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
 fn iter_types(btf: Btf) {
     // Iterate without looping ensuring non BtfTypes return None.
     let kfree = match btf.resolve_types_by_name("kfree").unwrap().pop().unwrap() {
@@ -154,7 +202,7 @@ fn iter_types(btf: Btf) {
     let ml = sk_buff
         .members
         .iter()
-        .find(|&m| btf.resolve_name(m).unwrap().eq("mac_len"));
+        .find(|&m| btf.resolve_name(m).unwrap_or_default().eq("mac_len"));
 
     let types: Vec<Type> = btf
         .type_iter(ml.unwrap())

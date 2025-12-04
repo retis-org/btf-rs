@@ -208,6 +208,9 @@ impl Iterator for TypeIter<'_> {
     }
 }
 
+/// Anonymous types can be fetched using this special string as name.
+pub const ANON_TYPE_NAME: &str = "(anon)";
+
 /// Rust representation of BTF types. Each type then contains its own specific
 /// data and provides helpers to access it.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -235,6 +238,40 @@ pub enum Type {
 }
 
 impl Type {
+    pub(super) fn from_reader<R: Read>(
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+        bt: cbtf::btf_type,
+    ) -> Result<Self> {
+        // Each BTF type needs specific handling to parse its type-specific header.
+        match bt.kind() {
+            1 => Ok(Type::Int(Int::from_reader(reader, endianness, bt)?)),
+            2 => Ok(Type::Ptr(Ptr::new(bt))),
+            3 => Ok(Type::Array(Array::from_reader(reader, endianness, bt)?)),
+            4 => Ok(Type::Struct(Struct::from_reader(reader, endianness, bt)?)),
+            5 => Ok(Type::Union(Struct::from_reader(reader, endianness, bt)?)),
+            6 => Ok(Type::Enum(Enum::from_reader(reader, endianness, bt)?)),
+            7 => Ok(Type::Fwd(Fwd::new(bt))),
+            8 => Ok(Type::Typedef(Typedef::new(bt))),
+            9 => Ok(Type::Volatile(Volatile::new(bt))),
+            10 => Ok(Type::Const(Volatile::new(bt))),
+            11 => Ok(Type::Restrict(Volatile::new(bt))),
+            12 => Ok(Type::Func(Func::new(bt))),
+            13 => Ok(Type::FuncProto(FuncProto::from_reader(
+                reader, endianness, bt,
+            )?)),
+            14 => Ok(Type::Var(Var::from_reader(reader, endianness, bt)?)),
+            15 => Ok(Type::Datasec(Datasec::from_reader(reader, endianness, bt)?)),
+            16 => Ok(Type::Float(Float::new(bt))),
+            17 => Ok(Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?)),
+            18 => Ok(Type::TypeTag(Typedef::new(bt))),
+            19 => Ok(Type::Enum64(Enum64::from_reader(reader, endianness, bt)?)),
+            // We can't ignore unsupported types as we can't guess their
+            // size and thus how much to skip to the next type.
+            x => Err(Error::Format(format!("Unsupported BTF type ({x})"))),
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match &self {
             Type::Void => "void",
@@ -283,6 +320,11 @@ impl Type {
             _ => None,
         }
     }
+
+    /// Return whether the type is allowed to be anonymous.
+    pub(super) fn can_be_anon(&self) -> bool {
+        self.as_btf_type().is_some_and(|t| t.can_be_anon())
+    }
 }
 
 pub trait BtfType {
@@ -292,6 +334,10 @@ pub trait BtfType {
 
     fn get_type_id(&self) -> Result<u32> {
         Err(Error::OpNotSupp("No type offset in type".to_string()))
+    }
+
+    fn can_be_anon(&self) -> bool {
+        false
     }
 }
 
@@ -421,6 +467,9 @@ impl BtfType for Struct {
     fn get_name_offset(&self) -> Result<u32> {
         Ok(self.btf_type.name_off)
     }
+    fn can_be_anon(&self) -> bool {
+        true
+    }
 }
 
 /// Rust representation for BTF type `BTF_KIND_UNION`.
@@ -509,6 +558,9 @@ impl Enum {
 impl BtfType for Enum {
     fn get_name_offset(&self) -> Result<u32> {
         Ok(self.btf_type.name_off)
+    }
+    fn can_be_anon(&self) -> bool {
+        true
     }
 }
 
@@ -911,6 +963,9 @@ impl Enum64 {
 impl BtfType for Enum64 {
     fn get_name_offset(&self) -> Result<u32> {
         Ok(self.btf_type.name_off)
+    }
+    fn can_be_anon(&self) -> bool {
+        true
     }
 }
 

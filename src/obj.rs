@@ -82,43 +82,18 @@ impl BtfObj {
             // Add special type Void with ID 0 (not described in type section)
             // only on base BTF.
             types.insert(0, Type::Void);
+            // The first string in the string section is always a null string.
+            // Use index 0 to store the special anonymous name.
+            str_cache.insert(0, ANON_TYPE_NAME.to_string());
         }
 
         let end_type_section = offset as u64 + header.type_len as u64;
         while reader.stream_position()? < end_type_section {
             let bt = cbtf::btf_type::from_reader(reader, &endianness)?;
 
-            // Each BTF type needs specific handling to parse its type-specific
-            // header.
-            types.insert(
-                id,
-                match bt.kind() {
-                    1 => Type::Int(Int::from_reader(reader, &endianness, bt)?),
-                    2 => Type::Ptr(Ptr::new(bt)),
-                    3 => Type::Array(Array::from_reader(reader, &endianness, bt)?),
-                    4 => Type::Struct(Struct::from_reader(reader, &endianness, bt)?),
-                    5 => Type::Union(Struct::from_reader(reader, &endianness, bt)?),
-                    6 => Type::Enum(Enum::from_reader(reader, &endianness, bt)?),
-                    7 => Type::Fwd(Fwd::new(bt)),
-                    8 => Type::Typedef(Typedef::new(bt)),
-                    9 => Type::Volatile(Volatile::new(bt)),
-                    10 => Type::Const(Volatile::new(bt)),
-                    11 => Type::Restrict(Volatile::new(bt)),
-                    12 => Type::Func(Func::new(bt)),
-                    13 => Type::FuncProto(FuncProto::from_reader(reader, &endianness, bt)?),
-                    14 => Type::Var(Var::from_reader(reader, &endianness, bt)?),
-                    15 => Type::Datasec(Datasec::from_reader(reader, &endianness, bt)?),
-                    16 => Type::Float(Float::new(bt)),
-                    17 => Type::DeclTag(DeclTag::from_reader(reader, &endianness, bt)?),
-                    18 => Type::TypeTag(Typedef::new(bt)),
-                    19 => Type::Enum64(Enum64::from_reader(reader, &endianness, bt)?),
-                    // We can't ignore unsupported types as we can't guess their
-                    // size and thus how much to skip to the next type.
-                    x => return Err(Error::Format(format!("Unsupported BTF type ({x})"))),
-                },
-            );
+            let r#type = Type::from_reader(reader, &endianness, bt)?;
 
-            if bt.name_off > 0 {
+            if bt.name_off > 0 || r#type.can_be_anon() {
                 let name_off = bt.name_off;
                 // Look for the name in our own cache, and if not found try
                 // looking into the base one (if any).
@@ -134,6 +109,8 @@ impl BtfObj {
                     None => return Err(Error::InvalidString(name_off)),
                 }
             }
+
+            types.insert(id, r#type);
 
             id += 1;
         }
@@ -210,6 +187,10 @@ impl BtfObj {
     /// object.
     pub(super) fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
         let offset = r#type.get_name_offset()?;
+
+        if offset == 0 && !r#type.can_be_anon() {
+            return Err(Error::InvalidString(0));
+        }
         self.str_cache
             .get(&offset)
             .cloned()
