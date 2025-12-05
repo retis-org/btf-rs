@@ -184,7 +184,9 @@ impl BtfObj {
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
     pub(super) fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
-        let offset = r#type.get_name_offset()?;
+        let offset = r#type
+            .get_name_offset()
+            .ok_or(Error::OpNotSupp("No name offset in type".to_string()))?;
 
         if offset == 0 && !r#type.can_be_anon() {
             return Err(Error::InvalidString(0));
@@ -199,7 +201,9 @@ impl BtfObj {
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
     pub(super) fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
-        let id = r#type.get_type_id()?;
+        let id = r#type
+            .get_type_id()
+            .ok_or(Error::OpNotSupp("No type offset in type".to_string()))?;
         self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
     }
 }
