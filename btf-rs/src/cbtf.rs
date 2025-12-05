@@ -124,6 +124,14 @@ impl BtfKind {
         })
     }
 
+    // Returns true if the type is allowed to be anonymous, aka. a valid name
+    // offset of 0. Those can be recognized in the BTF documentation when the
+    // name offset is "0 or offset to a valid C identifier".
+    fn has_anon_name(&self) -> bool {
+        use BtfKind::*;
+        matches!(self, Struct | Union | Enum | Enum64)
+    }
+
     // Returns true if the type is using the size/type field as size.
     fn has_size(&self) -> bool {
         use BtfKind::*;
@@ -189,7 +197,7 @@ impl btf_header {
 
 #[cbtf_type]
 pub(super) struct btf_type {
-    pub(super) name_off: u32,
+    name_off: u32,
     // bits 0-15:  vlen
     // bits 16-23: unused
     // bits 24-28: kind
@@ -204,6 +212,21 @@ pub(super) struct btf_type {
 }
 
 impl btf_type {
+    pub(super) fn name_offset(&self) -> Option<u32> {
+        let offset = self.name_off;
+        if offset > 0 {
+            return Some(offset);
+        }
+
+        if let Ok(kind) = BtfKind::from_id(self.kind()) {
+            if kind.has_anon_name() {
+                return Some(0);
+            }
+        }
+
+        None
+    }
+
     pub(super) fn vlen(&self) -> u32 {
         self.info & 0xffff
     }

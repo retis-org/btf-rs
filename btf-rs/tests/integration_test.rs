@@ -162,11 +162,12 @@ fn resolve_ids_by_name(btf: Btf) {
     feature = "elf-compression",
     test_case(split_compressed_elf("zstd+zstd", "zst"))
 )]
-fn resolve_anon_types(btf: Btf) {
-    let anon_types = btf.resolve_types_by_name(ANON_TYPE_NAME).unwrap();
-    assert_ne!(anon_types.len(), 0);
+fn resolve_anon_name(btf: Btf) {
+    // Get a list of the anonymous types.
+    let types = btf.resolve_types_by_name("").unwrap();
+
     // Find an anonymous enumerator that contains the IPPROTO_IP member.
-    let sock_protos = anon_types.iter().find(|t| match t {
+    let sock_protos = types.iter().find(|t| match t {
         Type::Enum(e) => e
             .members
             .iter()
@@ -174,14 +175,88 @@ fn resolve_anon_types(btf: Btf) {
         _ => false,
     });
     assert!(sock_protos.is_some());
-    if let Type::Enum(e) = sock_protos.unwrap() {
-        assert_eq!(
+
+    // Check name bijection.
+    match sock_protos {
+        Some(Type::Enum(e)) => assert_eq!(
             btf.resolve_name(e).expect("resolve name failed"),
-            ANON_TYPE_NAME.to_string()
-        );
-    } else {
-        panic!("not an enum");
+            "".to_string()
+        ),
+        _ => panic!("not an enum"),
     }
+
+    // Get a type without a name which is not anonymous. It's a const.
+    match btf.resolve_type_by_id(4).unwrap() {
+        Some(Type::Const(c)) => assert!(btf.resolve_name(&c).is_err()),
+        _ => panic!("not a const"),
+    }
+
+    // Get a list of the anonymous ids.
+    let ids = btf.resolve_ids_by_name("").unwrap();
+    assert_ne!(ids.len(), 0)
+}
+
+#[test_case(bytes())]
+#[test_case(file())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
+#[test_case(split_file())]
+#[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
+#[cfg(feature = "regex")]
+fn resolve_anon_regex(btf: Btf) {
+    let re = regex::Regex::new(&format!("^$")).unwrap();
+
+    // Get a list of the anonymous types.
+    let types = btf.resolve_types_by_regex(&re).unwrap();
+
+    // Find an anonymous enumerator that contains the IPPROTO_IP member.
+    let sock_protos = types.iter().find(|t| match t {
+        Type::Enum(e) => e
+            .members
+            .iter()
+            .any(|m| btf.resolve_name(m).is_ok_and(|v| v == "IPPROTO_IP")),
+        _ => false,
+    });
+    assert!(sock_protos.is_some());
+
+    // Check name bijection.
+    match sock_protos {
+        Some(Type::Enum(e)) => assert_eq!(
+            btf.resolve_name(e).expect("resolve name failed"),
+            "".to_string()
+        ),
+        _ => panic!("not an enum"),
+    }
+
+    // Get a type without a name which is not anonymous. It's a const.
+    match btf.resolve_type_by_id(4).unwrap() {
+        Some(Type::Const(c)) => assert!(btf.resolve_name(&c).is_err()),
+        _ => panic!("not a const"),
+    }
+
+    // Get a list of the anonymous ids.
+    let ids = btf.resolve_ids_by_regex(&re).unwrap();
+    assert_ne!(ids.len(), 0);
 }
 
 #[test_case(bytes())]
