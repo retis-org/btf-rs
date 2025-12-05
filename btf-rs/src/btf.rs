@@ -168,7 +168,9 @@ impl Btf {
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
     pub fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
-        let id = r#type.get_type_id()?;
+        let id = r#type
+            .get_type_id()
+            .ok_or(Error::OpNotSupp("No chained type in type".to_string()))?;
         self.resolve_type_by_id(id)?.ok_or(Error::InvalidType(id))
     }
 
@@ -335,12 +337,12 @@ impl Type {
 }
 
 pub trait BtfType {
-    fn get_name_offset(&self) -> Result<u32> {
-        Err(Error::OpNotSupp("No name offset in type".to_string()))
+    fn get_name_offset(&self) -> Option<u32> {
+        None
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Err(Error::OpNotSupp("No type offset in type".to_string()))
+    fn get_type_id(&self) -> Option<u32> {
+        None
     }
 
     fn can_be_anon(&self) -> bool {
@@ -385,8 +387,8 @@ impl Int {
 }
 
 impl BtfType for Int {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
 }
 
@@ -403,8 +405,8 @@ impl Ptr {
 }
 
 impl BtfType for Ptr {
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type().expect("ptr should have a type"))
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -434,8 +436,8 @@ impl Array {
 }
 
 impl BtfType for Array {
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_array.r#type)
+    fn get_type_id(&self) -> Option<u32> {
+        Some(self.btf_array.r#type)
     }
 }
 
@@ -473,8 +475,8 @@ impl Struct {
 }
 
 impl BtfType for Struct {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
     fn can_be_anon(&self) -> bool {
         true
@@ -519,12 +521,12 @@ impl Member {
 }
 
 impl BtfType for Member {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_member.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_member.name_off)
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_member.r#type)
+    fn get_type_id(&self) -> Option<u32> {
+        Some(self.btf_member.r#type)
     }
 }
 
@@ -565,8 +567,8 @@ impl Enum {
 }
 
 impl BtfType for Enum {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
     fn can_be_anon(&self) -> bool {
         true
@@ -592,8 +594,8 @@ impl EnumMember {
 }
 
 impl BtfType for EnumMember {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_enum.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_enum.name_off)
     }
 }
 
@@ -620,8 +622,8 @@ impl Fwd {
 }
 
 impl BtfType for Fwd {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
 }
 
@@ -638,12 +640,12 @@ impl Typedef {
 }
 
 impl BtfType for Typedef {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type().expect("typedef should have a type"))
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -663,8 +665,8 @@ impl Volatile {
 }
 
 impl BtfType for Volatile {
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type().expect("volatile should have a type"))
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -699,12 +701,12 @@ impl Func {
 }
 
 impl BtfType for Func {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type().expect("func should have a type"))
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -759,12 +761,12 @@ impl Parameter {
 }
 
 impl BtfType for Parameter {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_param.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_param.name_off)
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_param.r#type)
+    fn get_type_id(&self) -> Option<u32> {
+        Some(self.btf_param.r#type)
     }
 }
 
@@ -797,12 +799,12 @@ impl Var {
 }
 
 impl BtfType for Var {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type().expect("var should have a type"))
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -833,8 +835,8 @@ impl Datasec {
 }
 
 impl BtfType for Datasec {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
 }
 
@@ -861,8 +863,8 @@ impl VarSecinfo {
 }
 
 impl BtfType for VarSecinfo {
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_var_secinfo.r#type)
+    fn get_type_id(&self) -> Option<u32> {
+        Some(self.btf_var_secinfo.r#type)
     }
 }
 
@@ -883,8 +885,8 @@ impl Float {
 }
 
 impl BtfType for Float {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
 }
 
@@ -917,12 +919,12 @@ impl DeclTag {
 }
 
 impl BtfType for DeclTag {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type().expect("decl tag should have a type"))
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -963,8 +965,8 @@ impl Enum64 {
 }
 
 impl BtfType for Enum64 {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_type.name_off)
     }
     fn can_be_anon(&self) -> bool {
         true
@@ -990,7 +992,7 @@ impl Enum64Member {
 }
 
 impl BtfType for Enum64Member {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_enum64.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_enum64.name_off)
     }
 }
