@@ -1016,6 +1016,11 @@ impl Datasec {
             variables,
         })
     }
+
+    pub fn size(&self) -> usize {
+        // Unwrap as `Datasec` has a size field.
+        self.btf_type.size().unwrap()
+    }
 }
 
 impl BtfType for Datasec {
