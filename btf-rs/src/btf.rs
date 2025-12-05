@@ -11,6 +11,28 @@ use std::{
 
 use crate::{cbtf, obj::BtfObj, Error, Result};
 
+// Macros helping dealing with the anonymous type name when given as an input to
+// the API. Not using functions to avoid cloning values.
+macro_rules! handle_anon_name {
+    ($name:ident) => {
+        match $name {
+            ANON_TYPE_NAME => "",
+            _ => $name,
+        }
+    };
+}
+#[cfg(feature = "regex")]
+macro_rules! handle_anon_regex {
+    ($re:ident) => {
+        if $re.is_match(ANON_TYPE_NAME) {
+            // Unwrap as the regex is fixed and known to be valid.
+            &regex::Regex::new(r"^$").unwrap()
+        } else {
+            $re
+        }
+    };
+}
+
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names.
 pub struct Btf {
@@ -74,8 +96,9 @@ impl Btf {
 
     /// Find a list of BTF ids using their name as a key.
     pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
-        let mut ids = self.resolve_split_ids_by_name(name)?;
+        let name = handle_anon_name!(name);
 
+        let mut ids = self.resolve_split_ids_by_name(name)?;
         if let Some(base) = &self.base {
             ids.append(&mut base.resolve_ids_by_name(name));
         }
@@ -86,14 +109,15 @@ impl Btf {
     /// Find a list of BTF ids using their name as a key, using the split BTF
     /// definition only. For internal use only.
     pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
-        Ok(self.obj.resolve_ids_by_name(name))
+        Ok(self.obj.resolve_ids_by_name(handle_anon_name!(name)))
     }
 
     /// Find a list of BTF ids whose names match a regex.
     #[cfg(feature = "regex")]
     pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
-        let mut ids = self.resolve_split_ids_by_regex(re)?;
+        let re = handle_anon_regex!(re);
 
+        let mut ids = self.resolve_split_ids_by_regex(re)?;
         if let Some(base) = &self.base {
             ids.append(&mut base.resolve_ids_by_regex(re));
         }
@@ -105,6 +129,7 @@ impl Btf {
     /// definition only. For internal use only.
     #[cfg(feature = "regex")]
     pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        let re = handle_anon_regex!(re);
         Ok(self.obj.resolve_ids_by_regex(re))
     }
 
@@ -120,8 +145,9 @@ impl Btf {
 
     /// Find a list of BTF types using their name as a key.
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
-        let mut types = self.resolve_split_types_by_name(name)?;
+        let name = handle_anon_name!(name);
 
+        let mut types = self.resolve_split_types_by_name(name)?;
         if let Some(base) = &self.base {
             types.append(&mut base.resolve_types_by_name(name)?);
         }
@@ -132,14 +158,15 @@ impl Btf {
     /// Find a list of BTF types using their name as a key, using the split BTF
     /// definition only. For internal use only.
     pub(crate) fn resolve_split_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
-        self.obj.resolve_types_by_name(name)
+        self.obj.resolve_types_by_name(handle_anon_name!(name))
     }
 
     /// Find a list of BTF types using a regex describing their name as a key.
     #[cfg(feature = "regex")]
     pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
-        let mut types = self.resolve_split_types_by_regex(re)?;
+        let re = handle_anon_regex!(re);
 
+        let mut types = self.resolve_split_types_by_regex(re)?;
         if let Some(base) = &self.base {
             types.append(&mut base.resolve_types_by_regex(re)?);
         }
@@ -151,18 +178,24 @@ impl Btf {
     /// using the split BTF definition only. For internal use only.
     #[cfg(feature = "regex")]
     pub(crate) fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+        let re = handle_anon_regex!(re);
         self.obj.resolve_types_by_regex(re)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
     pub fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
-        match &self.base {
+        let name = match &self.base {
             Some(base) => base
                 .resolve_name(r#type)
-                .or_else(|_| self.obj.resolve_name(r#type)),
-            None => self.obj.resolve_name(r#type),
-        }
+                .or_else(|_| self.obj.resolve_name(r#type))?,
+            None => self.obj.resolve_name(r#type)?,
+        };
+
+        Ok(match name.as_str() {
+            "" => ANON_TYPE_NAME.to_string(),
+            _ => name,
+        })
     }
 
     /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
@@ -330,11 +363,6 @@ impl Type {
             _ => None,
         }
     }
-
-    /// Return whether the type is allowed to be anonymous.
-    pub(super) fn can_be_anon(&self) -> bool {
-        self.as_btf_type().is_some_and(|t| t.can_be_anon())
-    }
 }
 
 pub trait BtfType {
@@ -344,10 +372,6 @@ pub trait BtfType {
 
     fn get_type_id(&self) -> Option<u32> {
         None
-    }
-
-    fn can_be_anon(&self) -> bool {
-        false
     }
 }
 
@@ -401,7 +425,7 @@ impl Int {
 
 impl BtfType for Int {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
+        self.btf_type.name_offset()
     }
 }
 
@@ -517,10 +541,7 @@ impl Struct {
 
 impl BtfType for Struct {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
-    }
-    fn can_be_anon(&self) -> bool {
-        true
+        self.btf_type.name_offset()
     }
 }
 
@@ -638,10 +659,7 @@ impl Enum {
 
 impl BtfType for Enum {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
-    }
-    fn can_be_anon(&self) -> bool {
-        true
+        self.btf_type.name_offset()
     }
 }
 
@@ -699,7 +717,7 @@ impl Fwd {
 
 impl BtfType for Fwd {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
+        self.btf_type.name_offset()
     }
 }
 
@@ -717,7 +735,7 @@ impl Typedef {
 
 impl BtfType for Typedef {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
+        self.btf_type.name_offset()
     }
 
     fn get_type_id(&self) -> Option<u32> {
@@ -778,7 +796,7 @@ impl Func {
 
 impl BtfType for Func {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
+        self.btf_type.name_offset()
     }
 
     fn get_type_id(&self) -> Option<u32> {
@@ -912,7 +930,7 @@ impl Var {
 
 impl BtfType for Var {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
+        self.btf_type.name_offset()
     }
 
     fn get_type_id(&self) -> Option<u32> {
@@ -968,7 +986,7 @@ impl Datasec {
 
 impl BtfType for Datasec {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
+        self.btf_type.name_offset()
     }
 }
 
@@ -1025,7 +1043,7 @@ impl Float {
 
 impl BtfType for Float {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
+        self.btf_type.name_offset()
     }
 }
 
@@ -1070,7 +1088,7 @@ impl DeclTag {
 
 impl BtfType for DeclTag {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
+        self.btf_type.name_offset()
     }
 
     fn get_type_id(&self) -> Option<u32> {
@@ -1134,10 +1152,7 @@ impl Enum64 {
 
 impl BtfType for Enum64 {
     fn get_name_offset(&self) -> Option<u32> {
-        Some(self.btf_type.name_off)
-    }
-    fn can_be_anon(&self) -> bool {
-        true
+        self.btf_type.name_offset()
     }
 }
 
