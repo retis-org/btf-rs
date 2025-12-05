@@ -858,6 +858,10 @@ impl Datasec {
             variables,
         })
     }
+
+    pub fn size(&self) -> usize {
+        self.btf_type.size().expect("datasec should have a size")
+    }
 }
 
 impl BtfType for Datasec {
