@@ -392,7 +392,8 @@ impl Int {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        // Unwrap as `Int` has a size field.
+        self.btf_type.size().unwrap()
     }
 }
 
@@ -416,7 +417,8 @@ impl Ptr {
 
 impl BtfType for Ptr {
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        // Unwrap as `Ptr` has a type field.
+        Ok(self.btf_type.r#type().unwrap())
     }
 }
 
@@ -507,7 +509,8 @@ impl Struct {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        // Unwrap as `Struct` and `Union` have a size field.
+        self.btf_type.size().unwrap()
     }
 }
 
@@ -627,7 +630,8 @@ impl Enum {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        // Unwrap as `Enum` has a size field.
+        self.btf_type.size().unwrap()
     }
 }
 
@@ -716,7 +720,8 @@ impl BtfType for Typedef {
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        // Unwrap as `Typedef` has a type field.
+        Ok(self.btf_type.r#type().unwrap())
     }
 }
 
@@ -737,7 +742,8 @@ impl Volatile {
 
 impl BtfType for Volatile {
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        // Unwrap as `Volatile` has a type field.
+        Ok(self.btf_type.r#type().unwrap())
     }
 }
 
@@ -777,7 +783,8 @@ impl BtfType for Func {
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        // Unwrap as `Func` has a type field.
+        Ok(self.btf_type.r#type().unwrap())
     }
 }
 
@@ -827,7 +834,8 @@ impl FuncProto {
     }
 
     pub fn return_type_id(&self) -> u32 {
-        self.btf_type.r#type()
+        // Unwrap as `FuncProto` has a type field.
+        self.btf_type.r#type().unwrap()
     }
 }
 
@@ -910,7 +918,8 @@ impl BtfType for Var {
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        // Unwrap as `Var` has a type field.
+        Ok(self.btf_type.r#type().unwrap())
     }
 }
 
@@ -1012,7 +1021,8 @@ impl Float {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        // Unwrap as `Float` has a size field.
+        self.btf_type.size().unwrap()
     }
 }
 
@@ -1067,7 +1077,8 @@ impl BtfType for DeclTag {
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        // Unwrap as `DeclTag` has a type field.
+        Ok(self.btf_type.r#type().unwrap())
     }
 }
 
@@ -1120,7 +1131,8 @@ impl Enum64 {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        // Unwrap as `Enum64` has a size field.
+        self.btf_type.size().unwrap()
     }
 }
 

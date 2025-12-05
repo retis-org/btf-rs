@@ -123,6 +123,29 @@ impl BtfKind {
             x => return Err(Error::Format(format!("Unsupported BTF type {x}"))),
         })
     }
+
+    // Returns true if the type is using the size/type field as size.
+    fn has_size(&self) -> bool {
+        use BtfKind::*;
+        matches!(self, Int | Struct | Union | Enum | Datasec | Float | Enum64)
+    }
+
+    // Returns true if the type is using the size/type field as type.
+    fn has_type(&self) -> bool {
+        use BtfKind::*;
+        matches!(
+            self,
+            Ptr | Typedef
+                | Volatile
+                | Const
+                | Restrict
+                | Func
+                | FuncProto
+                | Var
+                | DeclTag
+                | TypeTag
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -193,12 +216,22 @@ impl btf_type {
         (self.info >> 31) & 0x1
     }
 
-    pub(super) fn size(&self) -> usize {
-        self.size_type as usize
+    pub(super) fn size(&self) -> Option<usize> {
+        if let Ok(kind) = BtfKind::from_id(self.kind()) {
+            if kind.has_size() {
+                return Some(self.size_type as usize);
+            }
+        }
+        None
     }
 
-    pub(super) fn r#type(&self) -> u32 {
-        self.size_type
+    pub(super) fn r#type(&self) -> Option<u32> {
+        if let Ok(kind) = BtfKind::from_id(self.kind()) {
+            if kind.has_type() {
+                return Some(self.size_type);
+            }
+        }
+        None
     }
 }
 
