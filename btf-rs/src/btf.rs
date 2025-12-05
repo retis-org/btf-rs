@@ -380,7 +380,7 @@ impl Int {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type.size().expect("int should have a size")
     }
 }
 
@@ -404,7 +404,7 @@ impl Ptr {
 
 impl BtfType for Ptr {
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        Ok(self.btf_type.r#type().expect("ptr should have a type"))
     }
 }
 
@@ -466,7 +466,9 @@ impl Struct {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type
+            .size()
+            .expect("struct and union should have a size")
     }
 }
 
@@ -558,7 +560,7 @@ impl Enum {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type.size().expect("enum should have a size")
     }
 }
 
@@ -641,7 +643,7 @@ impl BtfType for Typedef {
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        Ok(self.btf_type.r#type().expect("typedef should have a type"))
     }
 }
 
@@ -662,7 +664,7 @@ impl Volatile {
 
 impl BtfType for Volatile {
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        Ok(self.btf_type.r#type().expect("volatile should have a type"))
     }
 }
 
@@ -702,7 +704,7 @@ impl BtfType for Func {
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        Ok(self.btf_type.r#type().expect("func should have a type"))
     }
 }
 
@@ -732,7 +734,9 @@ impl FuncProto {
     }
 
     pub fn return_type_id(&self) -> u32 {
-        self.btf_type.r#type()
+        self.btf_type
+            .r#type()
+            .expect("func proto should have a type")
     }
 }
 
@@ -798,7 +802,7 @@ impl BtfType for Var {
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        Ok(self.btf_type.r#type().expect("var should have a type"))
     }
 }
 
@@ -874,7 +878,7 @@ impl Float {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type.size().expect("float should have a size")
     }
 }
 
@@ -918,7 +922,7 @@ impl BtfType for DeclTag {
     }
 
     fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+        Ok(self.btf_type.r#type().expect("decl tag should have a type"))
     }
 }
 
@@ -954,7 +958,7 @@ impl Enum64 {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type.size().expect("enum64 should have a size")
     }
 }
 
