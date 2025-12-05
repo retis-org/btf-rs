@@ -196,14 +196,4 @@ impl BtfObj {
             .cloned()
             .ok_or(Error::InvalidString(offset))
     }
-
-    /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
-    /// helper resolve a Type referenced in an other one. It is the main helper
-    /// to traverse the Type tree.
-    pub(super) fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
-        let id = r#type
-            .get_type_id()
-            .ok_or(Error::OpNotSupp("No type offset in type".to_string()))?;
-        self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
-    }
 }
