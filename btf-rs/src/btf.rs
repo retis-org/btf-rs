@@ -680,10 +680,6 @@ impl Enum {
         self.btf_type.kind_flag() == 1
     }
 
-    pub fn len(&self) -> usize {
-        self.btf_type.vlen() as usize
-    }
-
     pub fn size(&self) -> usize {
         // Unwrap as `Enum` has a size field.
         self.btf_type.size().unwrap()
@@ -1207,10 +1203,6 @@ impl Enum64 {
 
     pub fn is_signed(&self) -> bool {
         self.btf_type.kind_flag() == 1
-    }
-
-    pub fn len(&self) -> usize {
-        self.btf_type.vlen() as usize
     }
 
     pub fn size(&self) -> usize {
