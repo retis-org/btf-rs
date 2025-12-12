@@ -18,6 +18,8 @@ jobs:
       run: |
         cargo clippy --all-features -- -D warnings
         cargo clippy --all-features --example benchmark -- -D warnings
+    - name: Check documentation
+      run: RUSTDOCFLAGS="-D warnings" cargo doc --all-features
     - name: Check build
       run: |
         cargo build --verbose
