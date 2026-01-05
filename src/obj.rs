@@ -204,4 +204,9 @@ impl BtfObj {
         let id = r#type.get_type_id()?;
         self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
     }
+
+    /// Iterate over types as (id, &Type).
+    pub(super) fn iter(&self) -> impl Iterator<Item = (u32, &Type)> {
+        self.types.iter().map(|(id, t)| (*id, t))
+    }
 }

@@ -180,6 +180,25 @@ impl Btf {
             r#type: self.resolve_chained_type(r#type).ok(),
         }
     }
+
+    /// Iterate over types as (id, &Type).
+    /// Example:
+    /// ```
+    /// use btf_rs::{Btf, Type};
+    /// let btf = Btf::from_file("/sys/kernel/btf/vmlinux").unwrap();
+    /// btf.iter()
+    ///     .filter_map(|(_, r#type)| match r#type {
+    ///         Type::Func(func) => Some(func),
+    ///         _ => None,
+    ///     })
+    ///     .for_each(|func_type| {
+    ///         let func_name = btf.resolve_name(func_type).unwrap();
+    ///         println!("{func_name}");
+    ///     });
+    /// ```
+    pub fn iter(&self) -> impl Iterator<Item = (u32, &Type)> {
+        self.obj.iter()
+    }
 }
 
 /// Iterator type returned by `Btf::type_iter()`.
