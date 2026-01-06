@@ -20,9 +20,7 @@ pub(super) struct BtfObj {
     // Map from symbol names to their type id, used for retrieving a type by its
     // name.
     strings: HashMap<String, Vec<u32>>,
-    // Vector of all the types parsed from the BTF info. The vector makes the
-    // retrieval by their id implicit as the id is incremental in the BTF file;
-    // but that is really the goal here.
+    // Map from id to associated Type structure, parsed from the BTF info.
     types: HashMap<u32, Type>,
     // Length of the string section. Used to calculate the next string offset
     // of split BTFs.
