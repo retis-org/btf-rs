@@ -192,6 +192,8 @@ pub(super) struct btf_header {
     pub(super) type_len: u32,
     pub(super) str_off: u32,
     pub(super) str_len: u32,
+    pub(super) layout_off: u32,
+    pub(super) layout_len: u32,
 }
 
 impl btf_header {
@@ -204,20 +206,35 @@ impl btf_header {
             magic => return Err(Error::Format(format!("Invalid BTF magic: {magic:#x}"))),
         };
 
-        Ok((
-            btf_header {
-                magic,
-                version: reader.read_u8()?,
-                flags: reader.read_u8()?,
-                hdr_len: endianness.u32_from_reader(reader)?,
-                type_off: endianness.u32_from_reader(reader)?,
-                type_len: endianness.u32_from_reader(reader)?,
-                str_off: endianness.u32_from_reader(reader)?,
-                str_len: endianness.u32_from_reader(reader)?,
-            },
-            endianness,
-        ))
+        let mut header = btf_header {
+            magic,
+            version: reader.read_u8()?,
+            flags: reader.read_u8()?,
+            hdr_len: endianness.u32_from_reader(reader)?,
+            type_off: endianness.u32_from_reader(reader)?,
+            type_len: endianness.u32_from_reader(reader)?,
+            str_off: endianness.u32_from_reader(reader)?,
+            str_len: endianness.u32_from_reader(reader)?,
+            layout_off: 0,
+            layout_len: 0,
+        };
+
+        if header.hdr_len as usize
+            >= mem::offset_of!(btf_header, layout_off) + mem::size_of::<u32>() * 2
+        {
+            header.layout_off = endianness.u32_from_reader(reader)?;
+            header.layout_len = endianness.u32_from_reader(reader)?;
+        }
+
+        Ok((header, endianness))
     }
+}
+
+#[cbtf_type]
+pub(super) struct btf_layout {
+    pub(super) info_sz: u8,
+    pub(super) elem_sz: u8,
+    flags: u16,
 }
 
 // Skip a BTF type defined in the provided seekable reader.
