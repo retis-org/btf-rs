@@ -69,6 +69,12 @@ fn gen_bytes_field(ident: &Ident, r#type: &Type, offset: &mut usize) -> proc_mac
 
     let from = *offset;
     match ty.to_token_stream().to_string().as_str() {
+        "u8" => {
+            *offset += 1;
+            quote! {
+                #ident: *buf.first().ok_or(Error::Format("Not enough bytes to read".to_string()))?,
+            }
+        }
         "u16" => {
             *offset += 2;
             quote! {
@@ -100,6 +106,15 @@ fn gen_reader_field(ident: &Ident, r#type: &Type) -> proc_macro2::TokenStream {
     };
 
     match ty.to_token_stream().to_string().as_str() {
+        "u8" => {
+            quote! {
+                #ident: {
+                    let mut byte = [0u8];
+                    reader.read_exact(&mut byte)?;
+                    byte[0]
+                },
+            }
+        }
         "u16" => quote! {
             #ident: endianness.u16_from_reader(reader)?,
         },
