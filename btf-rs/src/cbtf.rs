@@ -97,13 +97,14 @@ pub(super) enum BtfKind {
     DeclTag = 17,
     TypeTag = 18,
     Enum64 = 19,
+    Unknown,
 }
 
 impl BtfKind {
     // Construct a `BtfKind` from its id.
-    pub(super) fn from_id(id: u32) -> Result<Self> {
+    pub(super) fn from_id(id: u32) -> Self {
         use BtfKind::*;
-        Ok(match id {
+        match id {
             1 => Int,
             2 => Ptr,
             3 => Array,
@@ -123,26 +124,29 @@ impl BtfKind {
             17 => DeclTag,
             18 => TypeTag,
             19 => Enum64,
-            x => return Err(Error::Format(format!("Unsupported BTF type {x}"))),
-        })
+            _ => Unknown,
+        }
     }
 
     // Returns the size a given type takes while stored in memory.
-    fn size(&self, vlen: usize) -> usize {
+    fn size_of(&self, vlen: usize) -> Option<usize> {
         use BtfKind::*;
-        mem::size_of::<btf_type>()
-            + match self {
-                Ptr | Fwd | Typedef | Volatile | Const | Restrict | Func | Float | TypeTag => 0,
-                Int => mem::size_of::<btf_int>(),
-                Array => mem::size_of::<btf_array>(),
-                Struct | Union => vlen * mem::size_of::<btf_member>(),
-                Enum => vlen * mem::size_of::<btf_enum>(),
-                FuncProto => vlen * mem::size_of::<btf_param>(),
-                Var => mem::size_of::<btf_var>(),
-                Datasec => vlen * mem::size_of::<btf_var_secinfo>(),
-                DeclTag => mem::size_of::<btf_decl_tag>(),
-                Enum64 => vlen * mem::size_of::<btf_enum64>(),
-            }
+        Some(
+            mem::size_of::<btf_type>()
+                + match self {
+                    Ptr | Fwd | Typedef | Volatile | Const | Restrict | Func | Float | TypeTag => 0,
+                    Int => mem::size_of::<btf_int>(),
+                    Array => mem::size_of::<btf_array>(),
+                    Struct | Union => vlen * mem::size_of::<btf_member>(),
+                    Enum => vlen * mem::size_of::<btf_enum>(),
+                    FuncProto => vlen * mem::size_of::<btf_param>(),
+                    Var => mem::size_of::<btf_var>(),
+                    Datasec => vlen * mem::size_of::<btf_var_secinfo>(),
+                    DeclTag => mem::size_of::<btf_decl_tag>(),
+                    Enum64 => vlen * mem::size_of::<btf_enum64>(),
+                    Unknown => return None,
+                },
+        )
     }
 
     // Returns true if the type is allowed to be anonymous, aka. a valid name
@@ -228,7 +232,10 @@ pub(super) fn btf_skip_type<R: Read + Seek>(reader: &mut R, endianness: &Endiann
     let id = (info >> 24) & 0x1f;
     let vlen = (info & 0xffff) as usize;
     reader.seek(SeekFrom::Current(
-        (BtfKind::from_id(id)?.size(vlen) - 2 * mem::size_of::<u32>()) as i64,
+        (BtfKind::from_id(id)
+            .size_of(vlen)
+            .ok_or(Error::Format(format!("Unknown size for kind {id}")))?
+            - 2 * mem::size_of::<u32>()) as i64,
     ))?;
 
     Ok(())
@@ -257,10 +264,8 @@ impl btf_type {
             return Some(offset);
         }
 
-        if let Ok(kind) = BtfKind::from_id(self.kind()) {
-            if kind.has_anon_name() {
-                return Some(0);
-            }
+        if BtfKind::from_id(self.kind()).has_anon_name() {
+            return Some(0);
         }
 
         None
@@ -279,19 +284,15 @@ impl btf_type {
     }
 
     pub(super) fn size(&self) -> Option<usize> {
-        if let Ok(kind) = BtfKind::from_id(self.kind()) {
-            if kind.has_size() {
-                return Some(self.size_type as usize);
-            }
+        if BtfKind::from_id(self.kind()).has_size() {
+            return Some(self.size_type as usize);
         }
         None
     }
 
     pub(super) fn r#type(&self) -> Option<u32> {
-        if let Ok(kind) = BtfKind::from_id(self.kind()) {
-            if kind.has_type() {
-                return Some(self.size_type);
-            }
+        if BtfKind::from_id(self.kind()).has_type() {
+            return Some(self.size_type);
         }
         None
     }
