@@ -5,10 +5,7 @@
 
 #![allow(non_camel_case_types, dead_code)]
 
-use std::{
-    io::{Read, Seek, SeekFrom},
-    mem,
-};
+use std::{io::Read, mem};
 
 use btf_rs_derive::cbtf_type;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
@@ -128,8 +125,8 @@ impl BtfKind {
         }
     }
 
-    // Returns the size a given type takes while stored in memory.
-    fn size_of(&self, vlen: usize) -> Option<usize> {
+    // Returns the size a given kind takes while stored in memory.
+    pub(crate) fn size_of(&self, vlen: usize) -> Option<usize> {
         use BtfKind::*;
         Some(
             mem::size_of::<btf_type>()
@@ -237,25 +234,11 @@ pub(super) struct btf_layout {
     flags: u16,
 }
 
-// Skip a BTF type defined in the provided seekable reader.
-pub(super) fn btf_skip_type<R: Read + Seek>(reader: &mut R, endianness: &Endianness) -> Result<()> {
-    // Skip header::name_off.
-    reader.seek(SeekFrom::Current(4))?;
-
-    // Read header::info.
-    let info = endianness.u32_from_reader(reader)?;
-
-    // Skip the BTF type size (we already skip 4 bytes + read 4 bytes).
-    let id = (info >> 24) & 0x1f;
-    let vlen = (info & 0xffff) as usize;
-    reader.seek(SeekFrom::Current(
-        (BtfKind::from_id(id)
-            .size_of(vlen)
-            .ok_or(Error::Format(format!("Unknown size for kind {id}")))?
-            - 2 * mem::size_of::<u32>()) as i64,
-    ))?;
-
-    Ok(())
+impl btf_layout {
+    // Returns the size the current kind takes while stored in memory.
+    pub(crate) fn size_of(&self, vlen: usize) -> usize {
+        mem::size_of::<btf_type>() + self.info_sz as usize + vlen * self.elem_sz as usize
+    }
 }
 
 #[cbtf_type]
