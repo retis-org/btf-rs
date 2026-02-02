@@ -11,7 +11,7 @@ use std::{
 
 use memmap2::MmapOptions;
 
-use crate::{cbtf, obj::BtfObj, Error, Result};
+use crate::{cbtf, section::BtfSection, Error, Result};
 
 /// Backend used by the `Btf` object to store and access the underlying BTF
 /// information.
@@ -30,8 +30,8 @@ pub enum Backend {
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names.
 pub struct Btf {
-    obj: Arc<BtfObj>,
-    base: Option<Arc<BtfObj>>,
+    obj: Arc<BtfSection>,
+    base: Option<Arc<BtfSection>>,
 }
 
 impl Btf {
@@ -51,9 +51,9 @@ impl Btf {
         Ok(Btf {
             obj: Arc::new(match backend {
                 Backend::Cache => {
-                    BtfObj::from_reader(&mut BufReader::new(File::open(path)?), None)?
+                    BtfSection::from_reader(&mut BufReader::new(File::open(path)?), None)?
                 }
-                Backend::Mmap => BtfObj::from_mmap(
+                Backend::Mmap => BtfSection::from_mmap(
                     unsafe { MmapOptions::new().map_copy_read_only(&File::open(path)?)? },
                     None,
                 )?,
@@ -70,7 +70,7 @@ impl Btf {
         }
 
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(
+            obj: Arc::new(BtfSection::from_reader(
                 &mut BufReader::new(File::open(path)?),
                 Some(base.obj.clone()),
             )?),
@@ -82,7 +82,7 @@ impl Btf {
     /// slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes), None)?),
+            obj: Arc::new(BtfSection::from_reader(&mut Cursor::new(bytes), None)?),
             base: None,
         })
     }
@@ -96,12 +96,26 @@ impl Btf {
 
         let base = base.obj.clone();
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(
+            obj: Arc::new(BtfSection::from_reader(
                 &mut Cursor::new(bytes),
                 Some(base.clone()),
             )?),
             base: Some(base),
         })
+    }
+
+    /// Returns a reference to the base `BtfSection`.
+    pub fn base(&self) -> &BtfSection {
+        match &self.base {
+            Some(base) => base,
+            None => &self.obj,
+        }
+    }
+
+    /// Returns a reference to the split `BtfSection`, if any.
+    pub fn split(&self) -> Option<&BtfSection> {
+        self.base.as_ref()?;
+        Some(&self.obj)
     }
 
     /// Find a list of BTF ids using their name as a key.

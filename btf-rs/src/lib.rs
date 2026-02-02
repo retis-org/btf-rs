@@ -149,7 +149,7 @@
 //   and provides an API enforcing the format rules. It strictly follows the
 //   format definition.
 // - `obj` handles our representation of the BTF data and allow converting
-//   `cbtf` representation into `btf` ones.
+//   `cbtf` representation into `btf` ones. A partial API is provided.
 // - `btf` provides our representation of the BTF data in Rust and a unified API
 //   on top of the BTF metadata representations. Additional logic is allowed,
 //   e.g. the `Btf` object handles split files and anonymous types.
@@ -161,8 +161,9 @@ pub mod error;
 pub mod utils;
 
 mod cbtf;
-mod obj;
+mod section;
 
 #[doc(inline)]
 pub use btf::*;
 pub use error::*;
+pub use section::BtfSection;
