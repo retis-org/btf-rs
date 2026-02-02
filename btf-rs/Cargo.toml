@@ -20,6 +20,7 @@ btf-rs-derive = { path = "../btf-rs-derive", version = "1.1" }
 byteorder = "1.5"
 bzip2 = { version = "0.6", optional = true }
 elf = { version = "0.8", optional = true }
+fallible-iterator = "0.3"
 flate2 = { version = "1.1", optional = true }
 liblzma = { version = "0.4", optional = true }
 memmap2 = "0.9"

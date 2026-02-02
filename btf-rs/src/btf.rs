@@ -9,6 +9,7 @@ use std::{
     sync::Arc,
 };
 
+use fallible_iterator::FallibleIterator;
 use memmap2::MmapOptions;
 
 use crate::{cbtf, section::BtfSection, Error, Result};
@@ -203,6 +204,11 @@ impl Btf {
         }
     }
 
+    /// Return an iterator over all types defined in the current BTF object.
+    pub fn type_iter(&self) -> TypeIter<'_> {
+        TypeIter::new(&self.obj, self.base.as_ref().map(|s| s.as_ref()))
+    }
+
     /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
@@ -221,6 +227,49 @@ impl Btf {
             btf: self,
             r#type: self.resolve_chained_type(r#type).ok(),
         }
+    }
+}
+
+/// Iterator over BTF types.
+pub struct TypeIter<'a> {
+    pub(crate) section: &'a BtfSection,
+    pub(crate) next_section: Option<&'a BtfSection>,
+    cursor: u32,
+    end: u32,
+}
+
+impl<'a> TypeIter<'a> {
+    pub(crate) fn new(section: &'a BtfSection, next_section: Option<&'a BtfSection>) -> Self {
+        let (start, end) = section.type_id_range();
+
+        TypeIter {
+            section,
+            next_section,
+            cursor: start,
+            end,
+        }
+    }
+}
+
+impl FallibleIterator for TypeIter<'_> {
+    type Item = Type;
+    type Error = Error;
+
+    fn next(&mut self) -> Result<Option<Self::Item>> {
+        // Go to the next section if needed.
+        if self.cursor > self.end {
+            self.section = match self.next_section.take() {
+                Some(section) => section,
+                None => return Ok(None),
+            };
+
+            (self.cursor, self.end) = self.section.type_id_range();
+        }
+
+        let r#type = self.section.resolve_type_by_id(self.cursor)?;
+        self.cursor += 1;
+
+        Ok(Some(r#type))
     }
 }
 

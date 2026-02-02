@@ -1,5 +1,6 @@
 use std::fs::read;
 
+use fallible_iterator::FallibleIterator;
 use test_case::test_case;
 
 use btf_rs::{utils::collection::*, *};
@@ -240,6 +241,15 @@ fn split_btf(btf: Btf) {
             Type::Enum(_)
         ));
     }
+
+    // type_iter()
+    let (_, base_max) = base.type_id_range();
+    let count = base.type_iter().count().unwrap();
+    assert_eq!(count, base_max as usize + 1);
+
+    let (split_min, split_max) = split.type_id_range();
+    let count = split.type_iter().count().unwrap();
+    assert_eq!(count, (split_max - split_min) as usize + 1);
 }
 
 // TODO: use assert_matches! once stable.
@@ -352,6 +362,14 @@ fn btf_api(btf: Btf) {
     let mut sk_buff = btf.resolve_types_by_name("sk_buff").unwrap();
     assert_eq!(sk_buff.len(), 1);
     assert!(matches!(sk_buff.pop().unwrap(), Type::Struct(_)));
+
+    // type_iter()
+    let (_, type_max) = match btf.split() {
+        Some(split) => split.type_id_range(),
+        None => btf.base().type_id_range(),
+    };
+    let count = btf.type_iter().count().unwrap();
+    assert_eq!(count, type_max as usize + 1);
 }
 
 #[test_case(bytes())]
