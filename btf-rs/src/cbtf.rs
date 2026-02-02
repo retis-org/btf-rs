@@ -94,6 +94,8 @@ pub(super) enum BtfKind {
     DeclTag = 17,
     TypeTag = 18,
     Enum64 = 19,
+    // The definition below doesn't map to the kernel ones, it is used to
+    // represent types we don't know about. They might be valid.
     Undefined,
 }
 

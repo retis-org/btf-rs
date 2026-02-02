@@ -254,20 +254,26 @@ impl FallibleIterator for TypeIter<'_> {
     type Error = Error;
 
     fn next(&mut self) -> Result<Option<Self::Item>> {
-        // Go to the next section if needed.
-        if self.cursor > self.end {
-            self.section = match self.next_section.take() {
-                Some(section) => section,
-                None => return Ok(None),
-            };
+        loop {
+            // Go to the next section if needed.
+            if self.cursor > self.end {
+                self.section = match self.next_section.take() {
+                    Some(section) => section,
+                    None => return Ok(None),
+                };
 
-            (self.cursor, self.end) = self.section.type_id_range();
+                (self.cursor, self.end) = self.section.type_id_range();
+            }
+
+            let r#type = self.section.resolve_type_by_id(self.cursor);
+            self.cursor += 1;
+
+            if matches!(r#type, Err(Error::UndefinedKind(_))) {
+                continue;
+            }
+
+            return r#type.map(Some);
         }
-
-        let r#type = self.section.resolve_type_by_id(self.cursor)?;
-        self.cursor += 1;
-
-        Ok(Some(r#type))
     }
 }
 
@@ -352,9 +358,7 @@ impl Type {
             BtfKind::DeclTag => Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?),
             BtfKind::TypeTag => Type::TypeTag(TypeTag::new(bt)),
             BtfKind::Enum64 => Type::Enum64(Enum64::from_reader(reader, endianness, bt)?),
-            BtfKind::Undefined => {
-                return Err(Error::Format(format!("Unsupported BTF kind {}", bt.kind())))
-            }
+            BtfKind::Undefined => return Err(Error::UndefinedKind(bt.kind())),
         })
     }
 
