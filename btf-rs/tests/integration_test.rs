@@ -240,6 +240,16 @@ fn split_btf(btf: Btf) {
             Type::Enum(_)
         ));
     }
+
+    // iter_types()
+    let (_, base_max) = base.type_id_range();
+    assert_eq!(base.iter_types().count(), base_max as usize + 1);
+
+    let (split_min, split_max) = split.type_id_range();
+    assert_eq!(
+        split.iter_types().count(),
+        (split_max - split_min) as usize + 1
+    );
 }
 
 // TODO: use assert_matches! once stable.
@@ -352,6 +362,13 @@ fn btf_api(btf: Btf) {
     let mut sk_buff = btf.resolve_types_by_name("sk_buff").unwrap();
     assert_eq!(sk_buff.len(), 1);
     assert!(matches!(sk_buff.pop().unwrap(), Type::Struct(_)));
+
+    // iter_types()
+    let (_, type_max) = match btf.split() {
+        Some(split) => split.type_id_range(),
+        None => btf.base().type_id_range(),
+    };
+    assert_eq!(btf.iter_types().count(), type_max as usize + 1);
 }
 
 #[test_case(bytes())]

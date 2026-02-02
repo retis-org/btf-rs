@@ -92,6 +92,17 @@ impl BtfSection {
         (start, end)
     }
 
+    /// Return an iterator over all types defined in the current BTF section.
+    pub fn iter_types(&self) -> TypesIter<'_> {
+        let (start, _) = self.type_id_range();
+
+        TypesIter {
+            section: self,
+            next_section: None,
+            current: start,
+        }
+    }
+
     // Resolve a name referenced by a Type which is defined in the current BTF
     // object.
     pub(super) fn resolve_name(&self, r#type: &dyn BtfType) -> Result<String> {
