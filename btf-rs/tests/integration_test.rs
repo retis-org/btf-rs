@@ -115,7 +115,131 @@ fn split_btf(btf: Btf) {
     // base.
     assert!(Btf::from_split_file("tests/assets/btf/openvswitch", &btf).is_err());
 
-    assert!(btf.split().is_some());
+    let base = btf.base();
+    let split = btf.split().unwrap();
+
+    // resolve_ids_by_name()
+    assert_eq!(
+        base.resolve_ids_by_name("int")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        21
+    );
+    assert_eq!(split.resolve_ids_by_name("int").unwrap().len(), 0);
+
+    assert_eq!(
+        base.resolve_ids_by_name("ovs_drop_reason").unwrap().len(),
+        0
+    );
+    assert_eq!(
+        split
+            .resolve_ids_by_name("ovs_drop_reason")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        36009
+    );
+
+    // resolve_type_by_id()
+    assert!(matches!(base.resolve_type_by_id(21).unwrap(), Type::Int(_)));
+    assert!(split.resolve_type_by_id(21).is_err());
+
+    assert!(base.resolve_type_by_id(36009).is_err());
+    assert!(matches!(
+        split.resolve_type_by_id(36009).unwrap(),
+        Type::Enum(_)
+    ));
+
+    // resolve_types_by_name()
+    assert!(matches!(
+        base.resolve_types_by_name("int")
+            .expect("resolve_types_by_name failed")
+            .pop()
+            .expect("resolve_types_by_name list is empty"),
+        Type::Int(_)
+    ));
+    assert_eq!(split.resolve_types_by_name("int").unwrap().len(), 0);
+
+    assert_eq!(
+        base.resolve_types_by_name("ovs_drop_reason").unwrap().len(),
+        0
+    );
+    assert!(matches!(
+        split
+            .resolve_types_by_name("ovs_drop_reason")
+            .expect("resolve_types_by_name failed")
+            .pop()
+            .expect("resolve_types_by_name list is empty"),
+        Type::Enum(_)
+    ));
+
+    // type_id_range()
+    let (base_start, base_end) = base.type_id_range();
+    let (split_start, split_end) = split.type_id_range();
+
+    assert_eq!(base_start, 0);
+    assert!(base_end > base_start);
+    assert_eq!(base_end + 1, split_start);
+    assert!(split_end > split_start);
+
+    assert_eq!(base.resolve_type_by_id(base_start).unwrap(), Type::Void);
+    assert!(base.resolve_type_by_id(base_end).is_ok());
+    assert!(base.resolve_type_by_id(base_end + 1).is_err());
+
+    assert!(split.resolve_type_by_id(split_start - 1).is_err());
+    assert!(split.resolve_type_by_id(split_start).is_ok());
+    assert_ne!(split.resolve_type_by_id(split_start).unwrap(), Type::Void);
+    assert_ne!(split.resolve_type_by_id(split_start).unwrap(), Type::Void);
+    assert!(split.resolve_type_by_id(split_end).is_ok());
+    assert!(split.resolve_type_by_id(split_end + 1).is_err());
+
+    #[cfg(feature = "regex")]
+    {
+        // resolve_ids_by_regex
+        let re = regex::Regex::new(r"^int$").unwrap();
+        assert_eq!(
+            base.resolve_ids_by_regex(&re)
+                .expect("resolve_ids_by_regex failed")
+                .pop()
+                .expect("resolve_ids_by_regex list is empty"),
+            21
+        );
+        assert_eq!(split.resolve_ids_by_regex(&re).unwrap().len(), 0);
+
+        let re = regex::Regex::new(r"^ovs_drop_reason$").unwrap();
+        assert_eq!(base.resolve_ids_by_regex(&re).unwrap().len(), 0);
+        assert_eq!(
+            split
+                .resolve_ids_by_regex(&re)
+                .expect("resolve_ids_by_regex failed")
+                .pop()
+                .expect("resolve_ids_by_regex list is empty"),
+            36009
+        );
+
+        // resolve_types_by_regex
+        let re = regex::Regex::new(r"^int$").unwrap();
+        assert!(matches!(
+            base.resolve_types_by_regex(&re)
+                .expect("resolve_types_by_regex failed")
+                .pop()
+                .expect("resolve_types_by_regex list is empty"),
+            Type::Int(_)
+        ));
+        assert_eq!(split.resolve_types_by_regex(&re).unwrap().len(), 0);
+
+        let re = regex::Regex::new(r"^ovs_drop_reason$").unwrap();
+        assert_eq!(base.resolve_types_by_regex(&re).unwrap().len(), 0);
+        assert!(matches!(
+            split
+                .resolve_types_by_regex(&re)
+                .expect("resolve_types_by_regex failed")
+                .pop()
+                .expect("resolve_types_by_regex list is empty"),
+            Type::Enum(_)
+        ));
+    }
 }
 
 // TODO: use assert_matches! once stable.
