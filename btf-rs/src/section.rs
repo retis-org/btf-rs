@@ -31,24 +31,33 @@ impl BtfSection {
         Ok(Self(Box::new(CachedBtfSection::new(reader, base)?)))
     }
 
-    // Find a list of BTF ids using their name as a key.
-    pub(super) fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+    /// Find a list of BTF ids using their name as a key.
+    ///
+    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
+    /// allowing it).
+    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
         self.0.resolve_ids_by_name(name)
     }
 
-    // Find a list of BTF ids whose names match a regex.
+    /// Find a list of BTF ids whose names match a regex.
+    ///
+    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
+    /// allowing it).
     #[cfg(feature = "regex")]
-    pub(super) fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
         self.0.resolve_ids_by_regex(re)
     }
 
-    // Find a BTF type using its id as a key.
-    pub(super) fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
+    /// Find a BTF type using its id as a key.
+    pub fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
         self.0.resolve_type_by_id(id)
     }
 
-    // Find a list of BTF types using their name as a key.
-    pub(super) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
+    /// Find a list of BTF types using their name as a key.
+    ///
+    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
+    /// allowing it).
+    pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         let mut types = Vec::new();
         self.resolve_ids_by_name(name)?
             .iter()
@@ -59,9 +68,12 @@ impl BtfSection {
         Ok(types)
     }
 
-    // Find a list of BTF types using a regex describing their name as a key.
+    /// Find a list of BTF types using a regex describing their name as a key.
+    ///
+    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
+    /// allowing it).
     #[cfg(feature = "regex")]
-    pub(super) fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+    pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         let mut types = Vec::new();
         self.resolve_ids_by_regex(re)?
             .iter()
@@ -70,6 +82,14 @@ impl BtfSection {
                 Ok(())
             })?;
         Ok(types)
+    }
+
+    /// Return the range of the type ids contained in this section in the
+    /// (start, end) form ("start" and "end" ids are included).
+    pub fn type_id_range(&self) -> (u32, u32) {
+        let start = self.0.type_id_offset();
+        let end = start + self.0.types() as u32 - 1;
+        (start, end)
     }
 
     // Resolve a name referenced by a Type which is defined in the current BTF
@@ -102,6 +122,8 @@ impl BtfSection {
 pub(super) trait BtfBackend {
     // Access the BTF header as a reference.
     fn header(&self) -> &cbtf::btf_header;
+    // Return the type id offset.
+    fn type_id_offset(&self) -> u32;
     // Return the number of types in the section.
     fn types(&self) -> usize;
     // Find a list of BTF ids using their name as a key.
@@ -239,6 +261,10 @@ impl CachedBtfSection {
 impl BtfBackend for CachedBtfSection {
     fn header(&self) -> &cbtf::btf_header {
         &self.header
+    }
+
+    fn type_id_offset(&self) -> u32 {
+        self.type_offset
     }
 
     fn types(&self) -> usize {
@@ -396,6 +422,10 @@ impl MmapBtfSection {
 impl BtfBackend for MmapBtfSection {
     fn header(&self) -> &cbtf::btf_header {
         &self.header
+    }
+
+    fn type_id_offset(&self) -> u32 {
+        self.type_offset
     }
 
     fn types(&self) -> usize {
