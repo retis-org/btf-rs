@@ -199,6 +199,17 @@ impl Btf {
         }
     }
 
+    /// Return an iterator over all types defined in the current BTF object.
+    pub fn type_iter(&self) -> TypeIter<'_> {
+        let (start, _) = self.obj.type_id_range();
+
+        TypeIter {
+            section: &self.obj,
+            next_section: self.base.as_ref().map(|s| s.as_ref()),
+            current: start,
+        }
+    }
+
     /// Types can have a reference to another one, e.g. `Ptr -> Int`. This
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
@@ -217,6 +228,34 @@ impl Btf {
             btf: self,
             r#type: self.resolve_chained_type(r#type).ok(),
         }
+    }
+}
+
+/// Iterator over BTF types.
+pub struct TypeIter<'a> {
+    pub(crate) section: &'a BtfSection,
+    pub(crate) next_section: Option<&'a BtfSection>,
+    pub(crate) current: u32,
+}
+
+impl Iterator for TypeIter<'_> {
+    type Item = Type;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Ok(r#type) = self.section.resolve_type_by_id(self.current) {
+            self.current += 1;
+            return Some(r#type);
+        }
+
+        let (_, end) = self.section.type_id_range();
+        if end != self.current - 1 {
+            return None;
+        }
+
+        self.section = self.next_section.take()?;
+        (self.current, _) = self.section.type_id_range();
+
+        self.next()
     }
 }
 
