@@ -4,7 +4,6 @@ use std::{
     ffi::CStr,
     io::{BufRead, Cursor, Seek, SeekFrom},
     mem,
-    ops::Deref,
     sync::Arc,
 };
 
@@ -14,15 +13,6 @@ use crate::{btf::*, cbtf, Error, Result};
 
 // Main internal representation of a parsed BTF object.
 pub(super) struct BtfObj(Box<dyn BtfBackend + Send + Sync>);
-
-// Allow using `BtfBackend` helpers on `BtfObj`.
-impl Deref for BtfObj {
-    type Target = dyn BtfBackend;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
 
 impl BtfObj {
     // Parse a BTF object from a mmaped file. This takes the `Mmap` ownership to
@@ -41,10 +31,39 @@ impl BtfObj {
         Ok(Self(Box::new(CachedBtfObj::new(reader, base)?)))
     }
 
+    // Find a list of BTF ids using their name as a key.
+    pub(super) fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        self.0.resolve_ids_by_name(name)
+    }
+
+    // Find a list of BTF ids whose names match a regex.
+    #[cfg(feature = "regex")]
+    pub(super) fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        self.0.resolve_ids_by_regex(re)
+    }
+
+    // Find a BTF type using its id as a key.
+    pub(super) fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
+        self.0.resolve_type_by_id(id)
+    }
+
     // Find a list of BTF types using their name as a key.
     pub(super) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         let mut types = Vec::new();
         self.resolve_ids_by_name(name)?
+            .iter()
+            .try_for_each(|id| -> Result<()> {
+                types.push(self.resolve_type_by_id(*id)?);
+                Ok(())
+            })?;
+        Ok(types)
+    }
+
+    // Find a list of BTF types using a regex describing their name as a key.
+    #[cfg(feature = "regex")]
+    pub(super) fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+        let mut types = Vec::new();
+        self.resolve_ids_by_regex(re)?
             .iter()
             .try_for_each(|id| -> Result<()> {
                 types.push(self.resolve_type_by_id(*id)?);
@@ -63,17 +82,18 @@ impl BtfObj {
             .ok_or(Error::InvalidString(offset))
     }
 
-    // Find a list of BTF types using a regex describing their name as a key.
-    #[cfg(feature = "regex")]
-    pub(super) fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
-        let mut types = Vec::new();
-        self.resolve_ids_by_regex(re)?
-            .iter()
-            .try_for_each(|id| -> Result<()> {
-                types.push(self.resolve_type_by_id(*id)?);
-                Ok(())
-            })?;
-        Ok(types)
+    fn header(&self) -> &cbtf::btf_header {
+        self.0.header()
+    }
+
+    // Return the number of types in the object.
+    fn types(&self) -> usize {
+        self.0.types()
+    }
+
+    // Resolve a name using its offset.
+    fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
+        self.0.resolve_name_by_offset(offset)
     }
 }
 
