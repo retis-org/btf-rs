@@ -212,22 +212,21 @@ impl Btf {
     /// This helper returns an iterator that allow to resolve a Type
     /// referenced in another one all the way down to the chain.
     /// The helper makes use of [`Btf::resolve_chained_type`].
-    pub fn type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> TypeIter<'_> {
-        TypeIter {
+    pub fn chained_type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> ChainedTypeIter<'_> {
+        ChainedTypeIter {
             btf: self,
             r#type: self.resolve_chained_type(r#type).ok(),
         }
     }
 }
 
-/// Iterator type returned by [`Btf::type_iter`].
-pub struct TypeIter<'a> {
+/// Iterator over chained types (types referencing other types in a chain).
+pub struct ChainedTypeIter<'a> {
     btf: &'a Btf,
     r#type: Option<Type>,
 }
 
-/// Iterator for [`TypeIter`].
-impl Iterator for TypeIter<'_> {
+impl Iterator for ChainedTypeIter<'_> {
     type Item = Type;
 
     fn next(&mut self) -> Option<Self::Item> {

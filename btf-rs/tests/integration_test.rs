@@ -515,7 +515,7 @@ fn resolve_anon_regex(btf: Btf) {
     feature = "elf-compression",
     test_case(split_compressed_elf("zstd+zstd", "zst"))
 )]
-fn iter_types(btf: Btf) {
+fn chained_type_iter(btf: Btf) {
     // Iterate without looping ensuring non BtfTypes return None.
     let kfree = match btf
         .resolve_types_by_name("kfree")
@@ -527,7 +527,7 @@ fn iter_types(btf: Btf) {
         _ => panic!("Resolved type is not a function"),
     };
 
-    let mut iter = btf.type_iter(&kfree);
+    let mut iter = btf.chained_type_iter(&kfree);
     assert!(iter.next().is_some());
     assert!(iter.next().is_none());
 
@@ -548,7 +548,7 @@ fn iter_types(btf: Btf) {
         .find(|&m| btf.resolve_name(m).unwrap_or_default().eq("mac_len"));
 
     let types: Vec<Type> = btf
-        .type_iter(ml.unwrap())
+        .chained_type_iter(ml.unwrap())
         .filter(|t| matches!(t, Type::Typedef(_) | Type::Int(_)))
         .collect::<Vec<_>>();
 
