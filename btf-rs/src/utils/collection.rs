@@ -202,12 +202,13 @@ impl BtfCollection {
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
 
-        for split in self.split.iter() {
-            split
-                .btf
-                .resolve_split_ids_by_name(name)?
-                .drain(..)
-                .for_each(|i| ids.push((split, i)));
+        for btf in self.split.iter() {
+            if let Some(split) = btf.split() {
+                split
+                    .resolve_ids_by_name(name)?
+                    .drain(..)
+                    .for_each(|i| ids.push((btf, i)));
+            }
         }
 
         Ok(ids)
@@ -230,12 +231,13 @@ impl BtfCollection {
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
 
-        for split in self.split.iter() {
-            split
-                .btf
-                .resolve_split_ids_by_regex(re)?
-                .drain(..)
-                .for_each(|i| ids.push((split, i)));
+        for btf in self.split.iter() {
+            if let Some(split) = btf.split() {
+                split
+                    .resolve_ids_by_regex(re)?
+                    .drain(..)
+                    .for_each(|i| ids.push((btf, i)));
+            }
         }
 
         Ok(ids)
@@ -255,12 +257,13 @@ impl BtfCollection {
             .map(|t| (&self.base, t))
             .collect::<Vec<_>>();
 
-        for split in self.split.iter() {
-            split
-                .btf
-                .resolve_split_types_by_name(name)?
-                .drain(..)
-                .for_each(|t| types.push((split, t)));
+        for btf in self.split.iter() {
+            if let Some(split) = btf.split() {
+                split
+                    .resolve_types_by_name(name)?
+                    .drain(..)
+                    .for_each(|t| types.push((btf, t)));
+            }
         }
 
         Ok(types)
@@ -282,12 +285,13 @@ impl BtfCollection {
             .map(|t| (&self.base, t))
             .collect::<Vec<_>>();
 
-        for split in self.split.iter() {
-            split
-                .btf
-                .resolve_split_types_by_regex(re)?
-                .drain(..)
-                .for_each(|t| types.push((split, t)));
+        for btf in self.split.iter() {
+            if let Some(split) = btf.split() {
+                split
+                    .resolve_types_by_regex(re)?
+                    .drain(..)
+                    .for_each(|t| types.push((btf, t)));
+            }
         }
 
         Ok(types)
