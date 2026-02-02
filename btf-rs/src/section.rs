@@ -164,6 +164,8 @@ struct CachedBtfSection {
     // retrieval by their id implicit as the id is incremental in the BTF file;
     // but that is really the goal here.
     types: Vec<Type>,
+    // Map of type ids having an unknown kind mapped to their kind id.
+    unknown_kinds: HashMap<u32, u32>,
 }
 
 impl CachedBtfSection {
@@ -222,6 +224,7 @@ impl CachedBtfSection {
 
         let mut strings: HashMap<String, Vec<u32>> = HashMap::with_capacity(est_str);
         let mut types = Vec::with_capacity(est_ty);
+        let mut unknown_kinds = HashMap::new();
 
         if base.is_none() {
             // Add special type Void with ID 0 (not described in type section)
@@ -233,8 +236,6 @@ impl CachedBtfSection {
             .ok_or(Error::Format("Invalid types section length".to_string()))?;
         while reader.stream_position()? < end_type_section {
             let bt = cbtf::btf_type::from_reader(reader, &endianness)?;
-            let r#type = Type::from_reader(reader, &endianness, bt)?;
-
             if let Some(name_off) = bt.name_offset() {
                 // Look for the name in our own cache, and if not found try
                 // looking into the base one (if any).
@@ -252,7 +253,14 @@ impl CachedBtfSection {
                 }
             }
 
-            types.push(r#type);
+            match cbtf::BtfKind::from_id(bt.kind()) {
+                cbtf::BtfKind::Unknown => {
+                    unknown_kinds.insert(id, bt.kind());
+                    layout.skip_type_vlen(reader, bt.kind(), bt.vlen())?
+                }
+                _ => types.push(Type::from_reader(reader, &endianness, bt)?),
+            };
+
             id += 1;
         }
 
@@ -271,6 +279,7 @@ impl CachedBtfSection {
             str_cache,
             strings,
             types,
+            unknown_kinds,
         })
     }
 }
@@ -302,10 +311,13 @@ impl BtfBackend for CachedBtfSection {
             _ => return Err(Error::InvalidType(id)),
         };
 
-        self.types
-            .get(local_id as usize)
-            .cloned()
-            .ok_or(Error::InvalidType(id))
+        match self.types.get(local_id as usize) {
+            Some(r#type) => Ok(r#type.clone()),
+            None if let Some(kind) = self.unknown_kinds.get(&local_id) => {
+                Err(Error::UnknownKind(*kind))
+            }
+            _ => Err(Error::InvalidType(id)),
+        }
     }
 
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
@@ -491,17 +503,21 @@ impl BtfBackend for MmapBtfSection {
             return Ok(Type::Void);
         }
 
-        Ok(match self.type_offsets.get(local_id as usize - 1) {
+        match self.type_offsets.get(local_id as usize - 1) {
             Some(offset) => {
                 let bt = cbtf::btf_type::from_bytes(&self.mmap[*offset..], &self.endianness)?;
+                if matches!(cbtf::BtfKind::from_id(bt.kind()), cbtf::BtfKind::Unknown) {
+                    return Err(Error::UnknownKind(bt.kind()));
+                }
+
                 Type::from_bytes(
                     &self.mmap[(*offset + mem::size_of::<cbtf::btf_type>())..],
                     &self.endianness,
                     bt,
-                )?
+                )
             }
-            None => return Err(Error::InvalidType(id)),
-        })
+            None => Err(Error::InvalidType(id)),
+        }
     }
 
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
