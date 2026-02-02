@@ -148,7 +148,7 @@
 // - `cbtf` operates at the BTF metadata level. It allows to handle the format
 //   and provides an API enforcing the format rules. It strictly follows the
 //   format definition.
-// - `obj` handles our representation of the BTF data and allow converting
+// - `section` handles our representation of the BTF data and allow converting
 //   `cbtf` representation into `btf` ones.
 // - `btf` provides our representation of the BTF data in Rust and a unified API
 //   on top of the BTF metadata representations. Additional logic is allowed,
@@ -161,8 +161,9 @@ pub mod error;
 pub mod utils;
 
 mod cbtf;
-mod obj;
+mod section;
 
 #[doc(inline)]
 pub use btf::*;
 pub use error::*;
+pub use section::BtfSection;

@@ -98,11 +98,24 @@ fn split_compressed_elf(alg: &str, ext: &str) -> Btf {
     .expect("split Btf construction failed")
 }
 
+#[test_case(bytes())]
+#[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
+fn base_btf(btf: Btf) {
+    assert!(btf.split().is_none());
+}
+
 #[test_case(split_file())]
 #[test_case(split_file_cache())]
 #[test_case(split_file_mmap())]
-fn double_split(btf: Btf) {
+#[test_case(split_bytes())]
+fn split_btf(btf: Btf) {
+    // Ensure a split BTF cannot be constructed using another split BTF as the
+    // base.
     assert!(Btf::from_split_file("tests/assets/btf/openvswitch", &btf).is_err());
+
+    assert!(btf.split().is_some());
 }
 
 // TODO: use assert_matches! once stable.
