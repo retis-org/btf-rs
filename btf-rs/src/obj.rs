@@ -46,10 +46,7 @@ impl BtfObj {
         self.resolve_ids_by_name(name)?
             .iter()
             .try_for_each(|id| -> Result<()> {
-                types.push(
-                    self.resolve_type_by_id(*id)?
-                        .ok_or(Error::InvalidType(*id))?,
-                );
+                types.push(self.resolve_type_by_id(*id)?);
                 Ok(())
             })?;
         Ok(types)
@@ -72,10 +69,7 @@ impl BtfObj {
         self.resolve_ids_by_regex(re)?
             .iter()
             .try_for_each(|id| -> Result<()> {
-                types.push(
-                    self.resolve_type_by_id(*id)?
-                        .ok_or(Error::InvalidType(*id))?,
-                );
+                types.push(self.resolve_type_by_id(*id)?);
                 Ok(())
             })?;
         Ok(types)
@@ -92,7 +86,7 @@ pub(super) trait BtfBackend {
     // Find a list of BTF ids using their name as a key.
     fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>>;
     // Find a BTF type using its id as a key.
-    fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>>;
+    fn resolve_type_by_id(&self, id: u32) -> Result<Type>;
     // Resolve a name using its offset.
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String>;
     // Find a list of BTF ids whose names match a regex.
@@ -225,14 +219,16 @@ impl BtfBackend for CachedBtfObj {
         Ok(self.strings.get(name).cloned().unwrap_or_default())
     }
 
-    fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
-        Ok(self
-            .types
-            .get(
-                id.checked_sub(self.type_offset)
-                    .ok_or(Error::InvalidType(id))? as usize,
-            )
-            .cloned())
+    fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
+        let local_id = match id.checked_sub(self.type_offset) {
+            Some(id) if (id as usize) < self.types() => id,
+            _ => return Err(Error::InvalidType(id)),
+        };
+
+        self.types
+            .get(local_id as usize)
+            .cloned()
+            .ok_or(Error::InvalidType(id))
     }
 
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
@@ -380,24 +376,26 @@ impl BtfBackend for MmapBtfObj {
         Ok(ids)
     }
 
-    fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
-        let id = id
-            .checked_sub(self.type_offset)
-            .ok_or(Error::InvalidType(id))? as usize;
+    fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
+        let local_id = match id.checked_sub(self.type_offset) {
+            Some(id) if (id as usize) < self.types() => id,
+            _ => return Err(Error::InvalidType(id)),
+        };
+
         if id == 0 {
-            return Ok(Some(Type::Void));
+            return Ok(Type::Void);
         }
 
-        Ok(match self.type_offsets.get(id - 1) {
+        Ok(match self.type_offsets.get(local_id as usize - 1) {
             Some(offset) => {
                 let bt = cbtf::btf_type::from_bytes(&self.mmap[*offset..], &self.endianness)?;
-                Some(Type::from_bytes(
+                Type::from_bytes(
                     &self.mmap[(*offset + mem::size_of::<cbtf::btf_type>())..],
                     &self.endianness,
                     bt,
-                )?)
+                )?
             }
-            None => None,
+            None => return Err(Error::InvalidType(id)),
         })
     }
 

@@ -147,10 +147,10 @@ impl Btf {
     }
 
     /// Find a BTF type using its id as a key.
-    pub fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
+    pub fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
         if let Some(base) = &self.base {
-            if let Some(r#type) = base.resolve_type_by_id(id)? {
-                return Ok(Some(r#type));
+            if let Ok(r#type) = base.resolve_type_by_id(id) {
+                return Ok(r#type);
             }
         }
 
@@ -217,7 +217,7 @@ impl Btf {
         let id = r#type
             .get_type_id()
             .ok_or(Error::OpNotSupp("No chained type in type".to_string()))?;
-        self.resolve_type_by_id(id)?.ok_or(Error::InvalidType(id))
+        self.resolve_type_by_id(id)
     }
 
     /// This helper returns an iterator that allow to resolve a Type
