@@ -128,8 +128,9 @@ impl CachedBtfObj {
         let (est_str, est_ty) = estimate(&header);
 
         // Cache the str section for later use (name resolution).
-        let offset = header.hdr_len + header.str_off;
-        reader.seek(SeekFrom::Start(offset as u64))?;
+        let offset = u64::checked_add(header.hdr_len as u64, header.str_off as u64)
+            .ok_or(Error::Format("Invalid strings section offset".to_string()))?;
+        reader.seek(SeekFrom::Start(offset))?;
 
         let mut str_cache = HashMap::with_capacity(est_str);
         let mut offset: u32 = 0;
@@ -151,8 +152,9 @@ impl CachedBtfObj {
         }
 
         // Finally build our representation of the BTF types.
-        let offset = header.hdr_len + header.type_off;
-        reader.seek(SeekFrom::Start(offset as u64))?;
+        let offset = u64::checked_add(header.hdr_len as u64, header.type_off as u64)
+            .ok_or(Error::Format("Invalid types section offset".to_string()))?;
+        reader.seek(SeekFrom::Start(offset))?;
 
         let mut strings: HashMap<String, Vec<u32>> = HashMap::with_capacity(est_str);
         let mut types = Vec::with_capacity(est_ty);
@@ -163,7 +165,8 @@ impl CachedBtfObj {
             types.push(Type::Void);
         }
 
-        let end_type_section = offset as u64 + header.type_len as u64;
+        let end_type_section = u64::checked_add(offset, header.type_len as u64)
+            .ok_or(Error::Format("Invalid types section length".to_string()))?;
         while reader.stream_position()? < end_type_section {
             let bt = cbtf::btf_type::from_reader(reader, &endianness)?;
             let r#type = Type::from_reader(reader, &endianness, bt)?;
@@ -285,20 +288,24 @@ impl MmapBtfObj {
         let (_, est_ty) = estimate(&header);
 
         // Then sanity check the string section.
-        if len < (header.str_len + header.str_off) as usize {
+        let offset = u64::checked_add(header.hdr_len as u64, header.str_off as u64)
+            .ok_or(Error::Format("Invalid strings section offset".to_string()))?;
+        if len < offset as usize {
             return Err(Error::Format(
                 "String section is missing or incomplete".to_string(),
             ));
         }
 
         // Finally build our representation of the BTF types.
-        let offset = header.hdr_len + header.type_off;
-        reader.seek(SeekFrom::Start(offset as u64))?;
+        let offset = u64::checked_add(header.hdr_len as u64, header.type_off as u64)
+            .ok_or(Error::Format("Invalid types section offset".to_string()))?;
+        reader.seek(SeekFrom::Start(offset))?;
 
         let mut offsets = Vec::with_capacity(est_ty);
         let mut types = 0;
 
-        let end_type_section = (offset + header.type_len) as u64;
+        let end_type_section = u64::checked_add(offset, header.type_len as u64)
+            .ok_or(Error::Format("Invalid types section length".to_string()))?;
         while reader.stream_position()? < end_type_section {
             offsets.push(reader.stream_position()? as usize);
             cbtf::btf_skip_type(&mut reader, &endianness)?;
