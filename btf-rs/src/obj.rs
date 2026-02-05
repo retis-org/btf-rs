@@ -125,6 +125,12 @@ impl CachedBtfObj {
                 header.version
             )));
         }
+        if header.flags != 0 {
+            return Err(Error::Format(format!(
+                "Unsupported flags {:#x}",
+                header.flags
+            )));
+        }
         let (est_str, est_ty) = estimate(&header);
 
         // Cache the str section for later use (name resolution).
@@ -283,6 +289,12 @@ impl MmapBtfObj {
             return Err(Error::Format(format!(
                 "Unsupported BTF version: {}",
                 header.version
+            )));
+        }
+        if header.flags != 0 {
+            return Err(Error::Format(format!(
+                "Unsupported flags {:#x}",
+                header.flags
             )));
         }
         let (_, est_ty) = estimate(&header);
