@@ -1,4 +1,5 @@
 use std::{
+    cmp,
     collections::HashMap,
     ffi::CStr,
     io::{BufRead, Cursor, Seek, SeekFrom},
@@ -124,7 +125,7 @@ impl CachedBtfObj {
                 header.version
             )));
         }
-        let (est_str, est_ty) = header.estimates();
+        let (est_str, est_ty) = estimate(&header);
 
         // Cache the str section for later use (name resolution).
         let offset = header.hdr_len + header.str_off;
@@ -281,7 +282,7 @@ impl MmapBtfObj {
                 header.version
             )));
         }
-        let (_, est_ty) = header.estimates();
+        let (_, est_ty) = estimate(&header);
 
         // Then sanity check the string section.
         if len < (header.str_len + header.str_off) as usize {
@@ -424,6 +425,19 @@ impl BtfBackend for MmapBtfObj {
         })?;
         Ok(ids)
     }
+}
+
+// Estimate the number of strings and types defined in the BTF object.
+fn estimate(header: &cbtf::btf_header) -> (usize, usize) {
+    let mut strings = header.str_len as usize / 15;
+    let mut types = header.type_len as usize / 22;
+
+    // Cap at 16MB.
+    const MAX_SIZE: usize = 16 * 1024 * 1024;
+    strings = cmp::max(strings, MAX_SIZE / mem::size_of::<String>());
+    types = cmp::max(types, MAX_SIZE / mem::size_of::<Type>());
+
+    (strings, types)
 }
 
 // Converts a bytes array to an str representation, without copy.
