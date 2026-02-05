@@ -571,10 +571,19 @@ fn resolve_function(btf: Btf) {
 }
 
 #[test]
-fn wrong_cache() {
+fn wrong_input() {
     assert!(Btf::from_file("/does/not/exist").is_err());
     assert!(BtfCollection::from_file("/does/not/exist").is_err());
     assert!(BtfCollection::from_dir("/does/not/exist", "foo").is_err());
+
+    assert!(Btf::from_bytes(&[]).is_err());
+    assert!(BtfCollection::from_bytes("invalid", &[]).is_err());
+
+    let base = Btf::from_file("tests/assets/btf/vmlinux").unwrap();
+    assert!(Btf::from_split_bytes(&[], &base).is_err());
+
+    let mut collection = BtfCollection::from_file("tests/assets/btf/vmlinux").unwrap();
+    assert!(collection.add_split_btf_from_bytes("foo", &[]).is_err());
 }
 
 #[test_case(split_file())]
