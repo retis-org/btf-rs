@@ -1,8 +1,6 @@
 //! Main object of the `btf-rs` crate, providing a way to parse BTF data and
 //! helpers to query the information it describes.
 
-#![allow(dead_code)]
-
 use std::{
     convert::AsRef,
     fs::File,
