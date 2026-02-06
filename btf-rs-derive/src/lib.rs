@@ -70,24 +70,21 @@ fn gen_bytes_field(ident: &Ident, r#type: &Type, offset: &mut usize) -> proc_mac
     let from = *offset;
     match ty.to_token_stream().to_string().as_str() {
         "u16" => {
-            let to = from + 2;
-            *offset = to;
+            *offset += 2;
             quote! {
-                #ident: endianness.u16_from_bytes(&buf[#from..#to])?,
+                #ident: endianness.u16_from_bytes(&buf[#from..])?,
             }
         }
         "u32" => {
-            let to = from + 4;
-            *offset = to;
+            *offset += 4;
             quote! {
-                #ident: endianness.u32_from_bytes(&buf[#from..#to])?,
+                #ident: endianness.u32_from_bytes(&buf[#from..])?,
             }
         }
         "i32" => {
-            let to = from + 4;
-            *offset = to;
+            *offset += 4;
             quote! {
-                #ident: endianness.i32_from_bytes(&buf[#from..#to])?,
+                #ident: endianness.i32_from_bytes(&buf[#from..])?,
             }
         }
         ty => panic!("Unsupported field type ({ty})"),
