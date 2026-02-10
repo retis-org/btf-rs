@@ -1,0 +1,32 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install the Rust toolchain
+      run: |
+        rustup update
+        rustup component add rustfmt clippy
+    - name: Check coding style
+      run: cargo fmt --check
+    - name: Check lints
+      run: |
+        cargo clippy --all-features -- -D warnings
+        cargo clippy --all-features --example benchmark -- -D warnings
+    - name: Check documentation
+      run: RUSTDOCFLAGS="-D warnings" cargo doc --all-features
+    - name: Check build
+      run: |
+        cargo build --verbose
+        cargo build --verbose -F elf
+        cargo build --verbose -F regex
+        cargo build --verbose -F elf,regex
+        cargo build --verbose -F elf-compression
+        cargo build --verbose -F elf-compression,regex
+    - name: Run integration tests
+      run: cargo test --verbose --all-features

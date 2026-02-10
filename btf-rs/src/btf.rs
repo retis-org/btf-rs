@@ -1,3 +1,6 @@
+//! Main object of the `btf-rs` crate, providing a way to parse BTF data and
+//! helpers to query the information it describes.
+
 #![allow(dead_code)]
 
 use std::{
@@ -8,7 +11,23 @@ use std::{
     sync::Arc,
 };
 
+use memmap2::MmapOptions;
+
 use crate::{cbtf, obj::BtfObj, Error, Result};
+
+/// Backend used by the `Btf` object to store and access the underlying BTF
+/// information.
+#[non_exhaustive]
+pub enum Backend {
+    /// Parse the BTF data during initialization and then store the result. This
+    /// provides faster API calls at the cost of a slower initialization and
+    /// larger memory footprint.
+    Cache,
+    /// Mmap the BTF data without parsing all of it. This provides a smaller
+    /// memory footprint and faster initialization at the cost of slower API
+    /// calls.
+    Mmap,
+}
 
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names.
@@ -18,15 +37,29 @@ pub struct Btf {
 }
 
 impl Btf {
-    /// Parse a stand-alone BTF object file and construct a Rust representation for later
-    /// use. Trying to open split BTF files using this function will fail. For split BTF
-    /// files use `Btf::from_split_file()`.
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Btf> {
+    /// Parse a stand-alone BTF object file and construct a Rust representation
+    /// for later use. By default [`Backend::Cache`] is used.
+    ///
+    /// Trying to open split BTF files using this function will fail. For split
+    /// BTF files use [`Btf::from_split_file`].
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_file_with_backend(&path, Backend::Cache)
+    }
+
+    /// Same as [`Btf::from_file`] but forcing a given [`Backend`] to be used.
+    /// This allows selecting the desired behavior and balance, but can fail if
+    /// a given [`Backend`] isn't supported by the underlying system.
+    pub fn from_file_with_backend<P: AsRef<Path>>(path: P, backend: Backend) -> Result<Self> {
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(
-                &mut BufReader::new(File::open(path)?),
-                None,
-            )?),
+            obj: Arc::new(match backend {
+                Backend::Cache => {
+                    BtfObj::from_reader(&mut BufReader::new(File::open(path)?), None)?
+                }
+                Backend::Mmap => BtfObj::from_mmap(
+                    unsafe { MmapOptions::new().map_copy_read_only(&File::open(path)?)? },
+                    None,
+                )?,
+            }),
             base: None,
         })
     }
@@ -34,11 +67,8 @@ impl Btf {
     /// Parse a split BTF object file and construct a Rust representation for later
     /// use. A base Btf object must be provided.
     pub fn from_split_file<P: AsRef<Path>>(path: P, base: &Btf) -> Result<Btf> {
-        if !path.as_ref().is_file() {
-            return Err(Error::Format(format!(
-                "Invalid BTF file {}",
-                path.as_ref().display()
-            )));
+        if base.base.is_some() {
+            return Err(Error::OpNotSupp("Provided base is a split BTF".to_string()));
         }
 
         Ok(Btf {
@@ -50,7 +80,8 @@ impl Btf {
         })
     }
 
-    /// Performs the same actions as from_file(), but fed with a byte slice.
+    /// Perform the same actions as [`Btf::from_file`], but fed with a byte
+    /// slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes), None)?),
@@ -58,8 +89,13 @@ impl Btf {
         })
     }
 
-    /// Performs the same actions as from_split_file(), but fed with a byte slice.
+    /// Performs the same actions as [`Btf::from_split_file`], but fed with a
+    /// byte slice.
     pub fn from_split_bytes(bytes: &[u8], base: &Btf) -> Result<Btf> {
+        if base.base.is_some() {
+            return Err(Error::OpNotSupp("Provided base is a split BTF".to_string()));
+        }
+
         let base = base.obj.clone();
         Ok(Btf {
             obj: Arc::new(BtfObj::from_reader(
@@ -71,52 +107,62 @@ impl Btf {
     }
 
     /// Find a list of BTF ids using their name as a key.
-    pub fn resolve_ids_by_name(&self, name: &str) -> Vec<u32> {
-        let mut ids = self.resolve_split_ids_by_name(name);
+    ///
+    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
+    /// allowing it).
+    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        let mut ids = self.resolve_split_ids_by_name(name)?;
 
         if let Some(base) = &self.base {
-            ids.append(&mut base.resolve_ids_by_name(name));
+            ids.append(&mut base.resolve_ids_by_name(name)?);
         }
 
-        ids
+        Ok(ids)
     }
 
-    /// Find a list of BTF ids using their name as a key, using the split BTF
-    /// definition only. For internal use only.
-    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Vec<u32> {
+    // Find a list of BTF ids using their name as a key, using the split BTF
+    // definition only. For internal use only.
+    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
         self.obj.resolve_ids_by_name(name)
     }
 
     /// Find a list of BTF ids whose names match a regex.
+    ///
+    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
+    /// allowing it).
     #[cfg(feature = "regex")]
-    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
-        let mut ids = self.resolve_split_ids_by_regex(re);
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        let mut ids = self.resolve_split_ids_by_regex(re)?;
 
         if let Some(base) = &self.base {
-            ids.append(&mut base.resolve_ids_by_regex(re));
+            ids.append(&mut base.resolve_ids_by_regex(re)?);
         }
 
-        ids
+        Ok(ids)
     }
 
-    /// Find a list of BTF ids whose names match a regex, using the split BTF
-    /// definition only. For internal use only.
+    // Find a list of BTF ids whose names match a regex, using the split BTF
+    // definition only. For internal use only.
     #[cfg(feature = "regex")]
-    pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Vec<u32> {
+    pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
         self.obj.resolve_ids_by_regex(re)
     }
 
     /// Find a BTF type using its id as a key.
-    pub fn resolve_type_by_id(&self, id: u32) -> Option<Type> {
-        match &self.base {
-            Some(base) => base
-                .resolve_type_by_id(id)
-                .or_else(|| self.obj.resolve_type_by_id(id)),
-            None => self.obj.resolve_type_by_id(id),
+    pub fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
+        if let Some(base) = &self.base {
+            if let Some(r#type) = base.resolve_type_by_id(id)? {
+                return Ok(Some(r#type));
+            }
         }
+
+        self.obj.resolve_type_by_id(id)
     }
 
     /// Find a list of BTF types using their name as a key.
+    ///
+    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
+    /// allowing it).
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         let mut types = self.resolve_split_types_by_name(name)?;
 
@@ -127,13 +173,16 @@ impl Btf {
         Ok(types)
     }
 
-    /// Find a list of BTF types using their name as a key, using the split BTF
-    /// definition only. For internal use only.
+    // Find a list of BTF types using their name as a key, using the split BTF
+    // definition only. For internal use only.
     pub(crate) fn resolve_split_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         self.obj.resolve_types_by_name(name)
     }
 
     /// Find a list of BTF types using a regex describing their name as a key.
+    ///
+    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
+    /// allowing it).
     #[cfg(feature = "regex")]
     pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         let mut types = self.resolve_split_types_by_regex(re)?;
@@ -145,16 +194,16 @@ impl Btf {
         Ok(types)
     }
 
-    /// Find a list of BTF types using a regex describing their name as a key,
-    /// using the split BTF definition only. For internal use only.
+    // Find a list of BTF types using a regex describing their name as a key,
+    // using the split BTF definition only. For internal use only.
     #[cfg(feature = "regex")]
-    pub fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+    pub(crate) fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         self.obj.resolve_types_by_regex(re)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
     /// object.
-    pub fn resolve_name<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<String> {
+    pub fn resolve_name(&self, r#type: &dyn BtfType) -> Result<String> {
         match &self.base {
             Some(base) => base
                 .resolve_name(r#type)
@@ -167,13 +216,15 @@ impl Btf {
     /// helper resolve a Type referenced in an other one. It is the main helper
     /// to traverse the Type tree.
     pub fn resolve_chained_type<T: BtfType + ?Sized>(&self, r#type: &T) -> Result<Type> {
-        let id = r#type.get_type_id()?;
-        self.resolve_type_by_id(id).ok_or(Error::InvalidType(id))
+        let id = r#type
+            .get_type_id()
+            .ok_or(Error::OpNotSupp("No chained type in type".to_string()))?;
+        self.resolve_type_by_id(id)?.ok_or(Error::InvalidType(id))
     }
 
     /// This helper returns an iterator that allow to resolve a Type
     /// referenced in another one all the way down to the chain.
-    /// The helper makes use of `Btf::resolve_chained_type()`.
+    /// The helper makes use of [`Btf::resolve_chained_type`].
     pub fn type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> TypeIter<'_> {
         TypeIter {
             btf: self,
@@ -182,13 +233,13 @@ impl Btf {
     }
 }
 
-/// Iterator type returned by `Btf::type_iter()`.
+/// Iterator type returned by [`Btf::type_iter`].
 pub struct TypeIter<'a> {
     btf: &'a Btf,
     r#type: Option<Type>,
 }
 
-/// Iterator for `Btf::TypeIter`.
+/// Iterator for [`TypeIter`].
 impl Iterator for TypeIter<'_> {
     type Item = Type;
 
@@ -208,11 +259,9 @@ impl Iterator for TypeIter<'_> {
     }
 }
 
-/// Anonymous types can be fetched using this special string as name.
-pub const ANON_TYPE_NAME: &str = "(anon)";
-
 /// Rust representation of BTF types. Each type then contains its own specific
 /// data and provides helpers to access it.
+#[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Type {
     Void,
@@ -238,40 +287,47 @@ pub enum Type {
 }
 
 impl Type {
+    // Creates a new Type reading a BTF definition from a reader.
     pub(super) fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         bt: cbtf::btf_type,
     ) -> Result<Self> {
         // Each BTF type needs specific handling to parse its type-specific header.
-        match bt.kind() {
-            1 => Ok(Type::Int(Int::from_reader(reader, endianness, bt)?)),
-            2 => Ok(Type::Ptr(Ptr::new(bt))),
-            3 => Ok(Type::Array(Array::from_reader(reader, endianness, bt)?)),
-            4 => Ok(Type::Struct(Struct::from_reader(reader, endianness, bt)?)),
-            5 => Ok(Type::Union(Struct::from_reader(reader, endianness, bt)?)),
-            6 => Ok(Type::Enum(Enum::from_reader(reader, endianness, bt)?)),
-            7 => Ok(Type::Fwd(Fwd::new(bt))),
-            8 => Ok(Type::Typedef(Typedef::new(bt))),
-            9 => Ok(Type::Volatile(Volatile::new(bt))),
-            10 => Ok(Type::Const(Volatile::new(bt))),
-            11 => Ok(Type::Restrict(Volatile::new(bt))),
-            12 => Ok(Type::Func(Func::new(bt))),
-            13 => Ok(Type::FuncProto(FuncProto::from_reader(
-                reader, endianness, bt,
-            )?)),
-            14 => Ok(Type::Var(Var::from_reader(reader, endianness, bt)?)),
-            15 => Ok(Type::Datasec(Datasec::from_reader(reader, endianness, bt)?)),
-            16 => Ok(Type::Float(Float::new(bt))),
-            17 => Ok(Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?)),
-            18 => Ok(Type::TypeTag(Typedef::new(bt))),
-            19 => Ok(Type::Enum64(Enum64::from_reader(reader, endianness, bt)?)),
-            // We can't ignore unsupported types as we can't guess their
-            // size and thus how much to skip to the next type.
-            x => Err(Error::Format(format!("Unsupported BTF type ({x})"))),
-        }
+        use cbtf::BtfKind;
+        Ok(match BtfKind::from_id(bt.kind())? {
+            BtfKind::Int => Type::Int(Int::from_reader(reader, endianness, bt)?),
+            BtfKind::Ptr => Type::Ptr(Ptr::new(bt)),
+            BtfKind::Array => Type::Array(Array::from_reader(reader, endianness, bt)?),
+            BtfKind::Struct => Type::Struct(Struct::from_reader(reader, endianness, bt)?),
+            BtfKind::Union => Type::Union(Struct::from_reader(reader, endianness, bt)?),
+            BtfKind::Enum => Type::Enum(Enum::from_reader(reader, endianness, bt)?),
+            BtfKind::Fwd => Type::Fwd(Fwd::new(bt)),
+            BtfKind::Typedef => Type::Typedef(Typedef::new(bt)),
+            BtfKind::Volatile => Type::Volatile(Volatile::new(bt)),
+            BtfKind::Const => Type::Const(Volatile::new(bt)),
+            BtfKind::Restrict => Type::Restrict(Volatile::new(bt)),
+            BtfKind::Func => Type::Func(Func::new(bt)),
+            BtfKind::FuncProto => Type::FuncProto(FuncProto::from_reader(reader, endianness, bt)?),
+            BtfKind::Var => Type::Var(Var::from_reader(reader, endianness, bt)?),
+            BtfKind::Datasec => Type::Datasec(Datasec::from_reader(reader, endianness, bt)?),
+            BtfKind::Float => Type::Float(Float::new(bt)),
+            BtfKind::DeclTag => Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?),
+            BtfKind::TypeTag => Type::TypeTag(TypeTag::new(bt)),
+            BtfKind::Enum64 => Type::Enum64(Enum64::from_reader(reader, endianness, bt)?),
+        })
     }
 
+    // Creates a new Type reading a BTF definition from bytes.
+    pub(crate) fn from_bytes(
+        buf: &[u8],
+        endianness: &cbtf::Endianness,
+        bt: cbtf::btf_type,
+    ) -> Result<Self> {
+        Self::from_reader(&mut Cursor::new(buf), endianness, bt)
+    }
+
+    /// Returns an `str` representation of the [`Type`].
     pub fn name(&self) -> &'static str {
         match &self {
             Type::Void => "void",
@@ -320,24 +376,18 @@ impl Type {
             _ => None,
         }
     }
-
-    /// Return whether the type is allowed to be anonymous.
-    pub(super) fn can_be_anon(&self) -> bool {
-        self.as_btf_type().is_some_and(|t| t.can_be_anon())
-    }
 }
 
+/// Helpers common to all BTF types. Ease the use of types.
 pub trait BtfType {
-    fn get_name_offset(&self) -> Result<u32> {
-        Err(Error::OpNotSupp("No name offset in type".to_string()))
+    /// Returns the offset of the string associated with the type, if any.
+    fn get_name_offset(&self) -> Option<u32> {
+        None
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Err(Error::OpNotSupp("No type offset in type".to_string()))
-    }
-
-    fn can_be_anon(&self) -> bool {
-        false
+    /// Returns the type id associated with the current type, if any.
+    fn get_type_id(&self) -> Option<u32> {
+        None
     }
 }
 
@@ -349,7 +399,7 @@ pub struct Int {
 }
 
 impl Int {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -373,13 +423,13 @@ impl Int {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type.size().expect("int should have a size")
     }
 }
 
 impl BtfType for Int {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 }
 
@@ -390,14 +440,14 @@ pub struct Ptr {
 }
 
 impl Ptr {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Ptr {
+    fn new(btf_type: cbtf::btf_type) -> Ptr {
         Ptr { btf_type }
     }
 }
 
 impl BtfType for Ptr {
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -410,7 +460,7 @@ pub struct Array {
 
 #[allow(clippy::len_without_is_empty)]
 impl Array {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -421,14 +471,15 @@ impl Array {
         })
     }
 
+    /// Number of elements in the `Array`.
     pub fn len(&self) -> usize {
         self.btf_array.nelems as usize
     }
 }
 
 impl BtfType for Array {
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_array.r#type)
+    fn get_type_id(&self) -> Option<u32> {
+        Some(self.btf_array.r#type)
     }
 }
 
@@ -436,11 +487,12 @@ impl BtfType for Array {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Struct {
     btf_type: cbtf::btf_type,
+    /// The members information. Use `.len()` to count them.
     pub members: Vec<Member>,
 }
 
 impl Struct {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -459,16 +511,15 @@ impl Struct {
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type
+            .size()
+            .expect("struct and union should have a size")
     }
 }
 
 impl BtfType for Struct {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
-    }
-    fn can_be_anon(&self) -> bool {
-        true
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 }
 
@@ -483,7 +534,7 @@ pub struct Member {
 }
 
 impl Member {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         kind_flag: u32,
@@ -510,12 +561,12 @@ impl Member {
 }
 
 impl BtfType for Member {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_member.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_member.name_off)
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_member.r#type)
+    fn get_type_id(&self) -> Option<u32> {
+        Some(self.btf_member.r#type)
     }
 }
 
@@ -523,12 +574,13 @@ impl BtfType for Member {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Enum {
     btf_type: cbtf::btf_type,
+    /// The enum members information. Use `.len()` to count them.
     pub members: Vec<EnumMember>,
 }
 
 #[allow(clippy::len_without_is_empty)]
 impl Enum {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -546,21 +598,14 @@ impl Enum {
         self.btf_type.kind_flag() == 1
     }
 
-    pub fn len(&self) -> usize {
-        self.btf_type.vlen() as usize
-    }
-
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type.size().expect("enum should have a size")
     }
 }
 
 impl BtfType for Enum {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
-    }
-    fn can_be_anon(&self) -> bool {
-        true
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 }
 
@@ -571,10 +616,7 @@ pub struct EnumMember {
 }
 
 impl EnumMember {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<EnumMember> {
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<EnumMember> {
         Ok(EnumMember {
             btf_enum: cbtf::btf_enum::from_reader(reader, endianness)?,
         })
@@ -586,8 +628,8 @@ impl EnumMember {
 }
 
 impl BtfType for EnumMember {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_enum.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_enum.name_off)
     }
 }
 
@@ -598,7 +640,7 @@ pub struct Fwd {
 }
 
 impl Fwd {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Fwd {
+    fn new(btf_type: cbtf::btf_type) -> Fwd {
         Fwd { btf_type }
     }
 
@@ -614,8 +656,8 @@ impl Fwd {
 }
 
 impl BtfType for Fwd {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 }
 
@@ -626,23 +668,20 @@ pub struct Typedef {
 }
 
 impl Typedef {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Typedef {
+    fn new(btf_type: cbtf::btf_type) -> Typedef {
         Typedef { btf_type }
     }
 }
 
 impl BtfType for Typedef {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
-
-/// Rust representation for BTF type `BTF_KIND_TYPE_TAG`.
-pub type TypeTag = Typedef;
 
 /// Rust representation for BTF type `BTF_KIND_VOLATILE`.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -651,14 +690,14 @@ pub struct Volatile {
 }
 
 impl Volatile {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Volatile {
+    fn new(btf_type: cbtf::btf_type) -> Volatile {
         Volatile { btf_type }
     }
 }
 
 impl BtfType for Volatile {
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -675,7 +714,7 @@ pub struct Func {
 }
 
 impl Func {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Func {
+    fn new(btf_type: cbtf::btf_type) -> Func {
         Func { btf_type }
     }
 
@@ -693,12 +732,12 @@ impl Func {
 }
 
 impl BtfType for Func {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -710,7 +749,7 @@ pub struct FuncProto {
 }
 
 impl FuncProto {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -728,7 +767,9 @@ impl FuncProto {
     }
 
     pub fn return_type_id(&self) -> u32 {
-        self.btf_type.r#type()
+        self.btf_type
+            .r#type()
+            .expect("func proto should have a type")
     }
 }
 
@@ -739,10 +780,7 @@ pub struct Parameter {
 }
 
 impl Parameter {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<Parameter> {
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<Parameter> {
         Ok(Parameter {
             btf_param: cbtf::btf_param::from_reader(reader, endianness)?,
         })
@@ -754,12 +792,12 @@ impl Parameter {
 }
 
 impl BtfType for Parameter {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_param.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_param.name_off)
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_param.r#type)
+    fn get_type_id(&self) -> Option<u32> {
+        Some(self.btf_param.r#type)
     }
 }
 
@@ -771,7 +809,7 @@ pub struct Var {
 }
 
 impl Var {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -783,21 +821,25 @@ impl Var {
     }
 
     pub fn is_static(&self) -> bool {
-        self.btf_var.linkage == 0
+        self.btf_var.linkage == cbtf::BTF_VAR_STATIC
     }
 
     pub fn is_global(&self) -> bool {
-        self.btf_var.linkage == 1
+        self.btf_var.linkage == cbtf::BTF_VAR_GLOBAL_ALLOCATED
+    }
+
+    pub fn is_extern(&self) -> bool {
+        self.btf_var.linkage == cbtf::BTF_VAR_GLOBAL_EXTERN
     }
 }
 
 impl BtfType for Var {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -809,7 +851,7 @@ pub struct Datasec {
 }
 
 impl Datasec {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -825,11 +867,15 @@ impl Datasec {
             variables,
         })
     }
+
+    pub fn size(&self) -> usize {
+        self.btf_type.size().expect("datasec should have a size")
+    }
 }
 
 impl BtfType for Datasec {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 }
 
@@ -840,10 +886,7 @@ pub struct VarSecinfo {
 }
 
 impl VarSecinfo {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<VarSecinfo> {
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<VarSecinfo> {
         Ok(VarSecinfo {
             btf_var_secinfo: cbtf::btf_var_secinfo::from_reader(reader, endianness)?,
         })
@@ -859,8 +902,8 @@ impl VarSecinfo {
 }
 
 impl BtfType for VarSecinfo {
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_var_secinfo.r#type)
+    fn get_type_id(&self) -> Option<u32> {
+        Some(self.btf_var_secinfo.r#type)
     }
 }
 
@@ -871,18 +914,18 @@ pub struct Float {
 }
 
 impl Float {
-    pub(super) fn new(btf_type: cbtf::btf_type) -> Float {
+    fn new(btf_type: cbtf::btf_type) -> Float {
         Float { btf_type }
     }
 
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type.size().expect("float should have a size")
     }
 }
 
 impl BtfType for Float {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 }
 
@@ -894,7 +937,7 @@ pub struct DeclTag {
 }
 
 impl DeclTag {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -912,15 +955,45 @@ impl DeclTag {
             x => Some(x as u32),
         }
     }
+
+    pub fn is_attribute(&self) -> bool {
+        self.btf_type.kind_flag() == 1
+    }
 }
 
 impl BtfType for DeclTag {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 
-    fn get_type_id(&self) -> Result<u32> {
-        Ok(self.btf_type.r#type())
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
+    }
+}
+
+/// Rust representation for BTF type `BTF_KIND_TYPE_TAG`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypeTag {
+    btf_type: cbtf::btf_type,
+}
+
+impl TypeTag {
+    fn new(btf_type: cbtf::btf_type) -> TypeTag {
+        TypeTag { btf_type }
+    }
+
+    pub fn is_attribute(&self) -> bool {
+        self.btf_type.kind_flag() == 1
+    }
+}
+
+impl BtfType for TypeTag {
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
+    }
+
+    fn get_type_id(&self) -> Option<u32> {
+        self.btf_type.r#type()
     }
 }
 
@@ -928,12 +1001,13 @@ impl BtfType for DeclTag {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Enum64 {
     btf_type: cbtf::btf_type,
+    /// The enum members information. Use `.len()` to count them.
     pub members: Vec<Enum64Member>,
 }
 
 #[allow(clippy::len_without_is_empty)]
 impl Enum64 {
-    pub(super) fn from_reader<R: Read>(
+    fn from_reader<R: Read>(
         reader: &mut R,
         endianness: &cbtf::Endianness,
         btf_type: cbtf::btf_type,
@@ -951,21 +1025,14 @@ impl Enum64 {
         self.btf_type.kind_flag() == 1
     }
 
-    pub fn len(&self) -> usize {
-        self.btf_type.vlen() as usize
-    }
-
     pub fn size(&self) -> usize {
-        self.btf_type.size()
+        self.btf_type.size().expect("enum64 should have a size")
     }
 }
 
 impl BtfType for Enum64 {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_type.name_off)
-    }
-    fn can_be_anon(&self) -> bool {
-        true
+    fn get_name_offset(&self) -> Option<u32> {
+        self.btf_type.name_offset()
     }
 }
 
@@ -976,10 +1043,7 @@ pub struct Enum64Member {
 }
 
 impl Enum64Member {
-    pub(super) fn from_reader<R: Read>(
-        reader: &mut R,
-        endianness: &cbtf::Endianness,
-    ) -> Result<Enum64Member> {
+    fn from_reader<R: Read>(reader: &mut R, endianness: &cbtf::Endianness) -> Result<Enum64Member> {
         Ok(Enum64Member {
             btf_enum64: cbtf::btf_enum64::from_reader(reader, endianness)?,
         })
@@ -991,7 +1055,7 @@ impl Enum64Member {
 }
 
 impl BtfType for Enum64Member {
-    fn get_name_offset(&self) -> Result<u32> {
-        Ok(self.btf_enum64.name_off)
+    fn get_name_offset(&self) -> Option<u32> {
+        Some(self.btf_enum64.name_off)
     }
 }

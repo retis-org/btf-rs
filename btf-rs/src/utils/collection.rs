@@ -1,4 +1,4 @@
-//! ### Collection of one base BTF and its split BTF (e.g. full system)
+//! # Collection of one base BTF and its split BTF (e.g. full system)
 //!
 //! The [`BtfCollection`] object is provided to allow parsing a collection of
 //! one base BTF and 0 or more split BTFs. For example, it can be used to
@@ -26,16 +26,16 @@
 //! [`BtfCollection::resolve_types_by_name`].
 use std::{fs, ops::Deref, path::Path};
 
-use crate::{Btf, Error, Result, Type};
+use crate::{Backend, Btf, Error, Result, Type};
 
 /// BtfCollection provides a full system BTF view, by combining a base BTF
 /// information with multiple split BTFs.
 ///
 /// Provides resolve by name helpers (looking up by id cannot work as ids are
-/// reused in different split BTF), which behave similarly to the ones in `Btf`
-/// but returning an additional named reference to the `Btf` object where the
-/// resolution was done. This is important as further lookups for the returned
-/// value must be done using the `Btf` object returned.
+/// reused in different split BTF), which behave similarly to the ones in
+/// [`Btf`] but returning an additional named reference to the [`Btf`] object
+/// where the resolution was done. This is important as further lookups for the
+/// returned value must be done using the [`Btf`] object returned.
 ///
 /// The base BTF lookups are prioritized over the split BTF ones.
 pub struct BtfCollection {
@@ -45,16 +45,16 @@ pub struct BtfCollection {
     split: Vec<NamedBtf>,
 }
 
-/// Struct embedding a Btf object alongside a name to uniquely identify it. Used
-/// to manipulate Btf objects when there could be multiple matches.
+/// Struct embedding a [`Btf`] object alongside a name to uniquely identify it.
+/// Used to manipulate [`Btf`] objects when there could be multiple matches.
 pub struct NamedBtf {
-    /// Name of the BtfObject.
+    /// Name of the [`Btf`] object.
     pub name: String,
-    /// The Btf object.
+    /// The [`Btf`] object.
     pub btf: Btf,
 }
 
-/// Let dereference NamedBtf into Btf directly for ease of use.
+/// Allow dereferencing [`NamedBtf`] into [`Btf`] for ease of use.
 impl Deref for NamedBtf {
     type Target = Btf;
 
@@ -64,7 +64,9 @@ impl Deref for NamedBtf {
 }
 
 impl BtfCollection {
-    /// Construct a BtfCollection object from a base BTF file only.
+    /// Construct a [`BtfCollection`] object from a base BTF file only. See
+    /// [`Btf::from_file`] for documentation on which [`Backend`] is used by
+    /// default.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<BtfCollection> {
         Ok(BtfCollection {
             base: NamedBtf {
@@ -75,7 +77,23 @@ impl BtfCollection {
         })
     }
 
-    /// Construct a BtfCollection object from a base BTF file only.
+    /// Same as [`BtfCollection::from_file`] but forcing a given [`Backend`] to
+    /// be used. This allows selecting the desired behavior and balance, but can
+    /// fail if a given [`Backend`] isn't supported by the underlying system.
+    pub fn from_file_with_backend<P: AsRef<Path>>(
+        path: P,
+        backend: Backend,
+    ) -> Result<BtfCollection> {
+        Ok(BtfCollection {
+            base: NamedBtf {
+                name: Self::file_name(path.as_ref())?,
+                btf: Btf::from_file_with_backend(path, backend)?,
+            },
+            split: Vec::new(),
+        })
+    }
+
+    /// Construct a [`BtfCollection`] object from a base BTF file only.
     pub fn from_bytes(name: &str, bytes: &[u8]) -> Result<BtfCollection> {
         Ok(BtfCollection {
             base: NamedBtf {
@@ -86,7 +104,8 @@ impl BtfCollection {
         })
     }
 
-    /// Add a split BTF in the current BtfCollection representation, reading a file.
+    /// Add a split BTF in the current [`BtfCollection`] representation, reading
+    /// a file.
     pub fn add_split_btf_from_file<P: AsRef<Path>>(&mut self, path: P) -> Result<&mut Self> {
         let name = Self::file_name(path.as_ref())?;
 
@@ -103,7 +122,8 @@ impl BtfCollection {
         Ok(self)
     }
 
-    /// Add a split BTF in the current BtfCollection representation, reading a byte slice.
+    /// Add a split BTF in the current [`BtfCollection`] representation, reading
+    /// a byte slice.
     pub fn add_split_btf_from_bytes(&mut self, name: &str, bytes: &[u8]) -> Result<&mut Self> {
         let name = name.to_string();
         if self.split.iter().any(|m| m.name == name) {
@@ -119,14 +139,31 @@ impl BtfCollection {
         Ok(self)
     }
 
-    /// Parse BTF objects stored in a directory and construct a BtfCollection
-    /// object, given a path to the directory and the filename of the base BTF file.
-    /// This is helpful for parsing /sys/kernel/btf for example.
+    /// Parse BTF objects stored in a directory and construct a
+    /// [`BtfCollection`] object, given a path to the directory and the filename
+    /// of the base BTF file. This is helpful for parsing `/sys/kernel/btf`
+    /// files.
     pub fn from_dir<P: AsRef<Path>>(dir: P, base: &str) -> Result<BtfCollection> {
-        // First parse the base BTF information.
         let mut sys_btf = BtfCollection::from_file(format!("{}/{base}", dir.as_ref().display()))?;
+        sys_btf.add_split_from_dir(dir, base)?;
+        Ok(sys_btf)
+    }
 
-        // Then loop over all split BTF files and parse them.
+    /// Same as [`BtfCollection::from_dir`] but forcing a given [`Backend`] to
+    /// be used. This allows selecting the desired behavior and balance, but can
+    /// fail if a given [`Backend`] isn't supported by the underlying system.
+    pub fn from_dir_with_backend<P: AsRef<Path>>(
+        dir: P,
+        base: &str,
+        backend: Backend,
+    ) -> Result<BtfCollection> {
+        let mut sys_btf =
+            Self::from_file_with_backend(format!("{}/{base}", dir.as_ref().display()), backend)?;
+        sys_btf.add_split_from_dir(dir, base)?;
+        Ok(sys_btf)
+    }
+
+    fn add_split_from_dir<P: AsRef<Path>>(&mut self, dir: P, base: &str) -> Result<()> {
         for file in fs::read_dir(dir.as_ref())? {
             match file {
                 Ok(file) => {
@@ -135,33 +172,32 @@ impl BtfCollection {
                     }
                     if let Ok(ft) = file.file_type() {
                         if !ft.is_dir() {
-                            sys_btf.add_split_btf_from_file(file.path())?;
+                            self.add_split_btf_from_file(file.path())?;
                         }
                     }
                 }
                 Err(e) => return Err(Error::IO(e)),
             }
         }
-
-        Ok(sys_btf)
+        Ok(())
     }
 
-    /// Get a reference to a `NamedBtf` given a module name. This `NamedBtf` can
-    /// then be used to perform scoped lookups.
+    /// Get a reference to a [`NamedBtf`] given a module name. This [`NamedBtf`]
+    /// can then be used to perform scoped lookups.
     pub fn get_named_btf(&self, name: &str) -> Option<&NamedBtf> {
         self.split.iter().find(|m| m.name == name)
     }
 
     /// Find a list of BTF ids using their name as a key. Matching ids can be
     /// found in multiple underlying BTF, thus this function returns a list of
-    /// tuples containing each a reference to `NamedBtf` (representing the BTF
+    /// tuples containing each a reference to [`NamedBtf`] (representing the BTF
     /// where a match was found) and the id. Further lookups must be done using
-    /// the `Btf` object contained in the linked `NamedBtf` one.
-    pub fn resolve_ids_by_name(&self, name: &str) -> Vec<(&NamedBtf, u32)> {
+    /// the [`Btf`] object contained in the linked [`NamedBtf`] one.
+    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, u32)>> {
         let mut ids = self
             .base
             .btf
-            .resolve_ids_by_name(name)
+            .resolve_ids_by_name(name)?
             .drain(..)
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
@@ -169,27 +205,27 @@ impl BtfCollection {
         for split in self.split.iter() {
             split
                 .btf
-                .resolve_split_ids_by_name(name)
+                .resolve_split_ids_by_name(name)?
                 .drain(..)
                 .for_each(|i| ids.push((split, i)));
         }
 
-        ids
+        Ok(ids)
     }
 
     /// Find a list of BTF ids whose names match a regex.
     ///
     /// Matching ids can be found in multiple underlying BTF, thus this function
-    /// returns a list of tuples containing each a reference to `NamedBtf`
+    /// returns a list of tuples containing each a reference to [`NamedBtf`]
     /// (representing the BTF where a match was found) and the id. Further
-    /// lookups must be done using the `Btf` object contained in the linked
-    /// `NamedBtf` one.
+    /// lookups must be done using the [`Btf`] object contained in the linked
+    /// [`NamedBtf`] one.
     #[cfg(feature = "regex")]
-    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Vec<(&NamedBtf, u32)> {
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<(&NamedBtf, u32)>> {
         let mut ids = self
             .base
             .btf
-            .resolve_ids_by_regex(re)
+            .resolve_ids_by_regex(re)?
             .drain(..)
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
@@ -197,19 +233,19 @@ impl BtfCollection {
         for split in self.split.iter() {
             split
                 .btf
-                .resolve_split_ids_by_regex(re)
+                .resolve_split_ids_by_regex(re)?
                 .drain(..)
                 .for_each(|i| ids.push((split, i)));
         }
 
-        ids
+        Ok(ids)
     }
 
     /// Find a list of BTF types using their name as a key. Matching types can
     /// be found in multiple underlying BTF, thus this function returns a list
-    /// of tuples containing each a reference to `NamedBtf` (representing the
+    /// of tuples containing each a reference to [`NamedBtf`] (representing the
     /// BTF where a match was found) and the type. Further lookups must be done
-    /// using the `Btf` object contained in the linked `NamedBtf` one.
+    /// using the [`Btf`] object contained in the linked [`NamedBtf`] one.
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, Type)>> {
         let mut types = self
             .base
@@ -233,9 +269,9 @@ impl BtfCollection {
     /// Find a list of BTF types using a regex describing their name as a key.
     /// Matching types can be found in multiple underlying BTF, thus this
     /// function returns a list of tuples containing each a reference to
-    /// `NamedBtf` (representing the BTF where a match was found) and the type.
-    /// Further lookups must be done using the `Btf` object contained in the
-    /// linked `NamedBtf` one.
+    /// [`NamedBtf`] (representing the BTF where a match was found) and the
+    /// type. Further lookups must be done using the `Btf` object contained in
+    /// the linked [`NamedBtf`] one.
     #[cfg(feature = "regex")]
     pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<(&NamedBtf, Type)>> {
         let mut types = self

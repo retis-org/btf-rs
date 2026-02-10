@@ -2,30 +2,41 @@ use std::fs::read;
 
 use test_case::test_case;
 
-use btf_rs::*;
+use btf_rs::{utils::collection::*, *};
 
 fn bytes() -> Btf {
-    Btf::from_bytes(&read("tests/assets/btf/vmlinux").unwrap()).unwrap()
+    Btf::from_bytes(&read("tests/assets/btf/vmlinux").expect("read failed"))
+        .expect("Btf construction failed")
 }
 
 fn file() -> Btf {
     Btf::from_file("tests/assets/btf/vmlinux").unwrap()
 }
 
+fn file_cache() -> Btf {
+    Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Cache).unwrap()
+}
+
+fn file_mmap() -> Btf {
+    Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Mmap).unwrap()
+}
+
 #[cfg(feature = "elf")]
 fn elf() -> Btf {
     Btf::from_bytes(
-        &utils::elf::extract_btf_from_file("tests/assets/elf/uncompressed/vmlinux").unwrap(),
+        &utils::elf::extract_btf_from_file("tests/assets/elf/uncompressed/vmlinux")
+            .expect("extraction failed"),
     )
-    .unwrap()
+    .expect("Btf construction failed")
 }
 
 #[cfg(feature = "elf-compression")]
 fn compressed_elf(alg: &str) -> Btf {
     Btf::from_bytes(
-        &utils::elf::extract_btf_from_file(format!("tests/assets/elf/{alg}/vmlinux")).unwrap(),
+        &utils::elf::extract_btf_from_file(format!("tests/assets/elf/{alg}/vmlinux"))
+            .expect("extraction failed"),
     )
-    .unwrap()
+    .expect("Btf construction failed")
 }
 
 fn split_file() -> Btf {
@@ -33,51 +44,80 @@ fn split_file() -> Btf {
     Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
 }
 
+fn split_file_cache() -> Btf {
+    let vmlinux = Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Cache).unwrap();
+    Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
+}
+
+fn split_file_mmap() -> Btf {
+    let vmlinux = Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Mmap).unwrap();
+    Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
+}
+
 fn split_bytes() -> Btf {
-    let vmlinux = Btf::from_bytes(&read("tests/assets/btf/vmlinux").unwrap()).unwrap();
-    Btf::from_split_bytes(&read("tests/assets/btf/openvswitch").unwrap(), &vmlinux).unwrap()
+    let vmlinux = Btf::from_bytes(&read("tests/assets/btf/vmlinux").expect("read failed"))
+        .expect("Btf construction failed");
+    Btf::from_split_bytes(
+        &read("tests/assets/btf/openvswitch").expect("read failed"),
+        &vmlinux,
+    )
+    .expect("split Btf construction failed")
 }
 
 #[cfg(feature = "elf")]
 fn split_elf() -> Btf {
     let vmlinux = Btf::from_bytes(
-        &utils::elf::extract_btf_from_file("tests/assets/elf/uncompressed/vmlinux").unwrap(),
+        &utils::elf::extract_btf_from_file("tests/assets/elf/uncompressed/vmlinux")
+            .expect("extraction failed"),
     )
-    .unwrap();
+    .expect("Btf construction failed");
     Btf::from_split_bytes(
         &utils::elf::extract_btf_from_file(
             "tests/assets/elf/uncompressed/kernel/net/openvswitch/openvswitch.ko",
         )
-        .unwrap(),
+        .expect("extraction failed"),
         &vmlinux,
     )
-    .unwrap()
+    .expect("split Btf construction failed")
 }
 
 #[cfg(feature = "elf-compression")]
 fn split_compressed_elf(alg: &str, ext: &str) -> Btf {
     let vmlinux = Btf::from_bytes(
-        &utils::elf::extract_btf_from_file(format!("tests/assets/elf/{alg}/vmlinux")).unwrap(),
+        &utils::elf::extract_btf_from_file(format!("tests/assets/elf/{alg}/vmlinux"))
+            .expect("extraction failed"),
     )
-    .unwrap();
+    .expect("Btf construction failed");
     Btf::from_split_bytes(
         &utils::elf::extract_btf_from_file(format!(
             "tests/assets/elf/{alg}/kernel/net/openvswitch/openvswitch.ko.{ext}"
         ))
-        .unwrap(),
+        .expect("extraction failed"),
         &vmlinux,
     )
-    .unwrap()
+    .expect("split Btf construction failed")
 }
 
+#[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
+fn double_split(btf: Btf) {
+    assert!(Btf::from_split_file("tests/assets/btf/openvswitch", &btf).is_err());
+}
+
+// TODO: use assert_matches! once stable.
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -96,25 +136,102 @@ fn split_compressed_elf(alg: &str, ext: &str) -> Btf {
     feature = "elf-compression",
     test_case(split_compressed_elf("zstd+zstd", "zst"))
 )]
-fn resolve_ids_by_name(btf: Btf) {
-    // Resolve primitive type.
-    assert_eq!(btf.resolve_ids_by_name("int").pop().unwrap(), 21);
-    // Resolve typedef.
-    assert_eq!(btf.resolve_ids_by_name("u64").pop().unwrap(), 36);
-    // Resolve struct.
-    assert_eq!(btf.resolve_ids_by_name("sk_buff").pop().unwrap(), 1768);
-    // Resolve function.
-    assert_eq!(btf.resolve_ids_by_name("kfree_skb").pop().unwrap(), 26250);
+fn btf_api(btf: Btf) {
+    // resolve_ids_by_name()
+    assert_eq!(
+        btf.resolve_ids_by_name("not_a_known_name").unwrap().len(),
+        0
+    );
+    assert_eq!(
+        btf.resolve_ids_by_name("not_a_known_name_but_a_very_long_one_#$%^!()';]/")
+            .unwrap()
+            .len(),
+        0
+    );
+    assert_eq!(
+        btf.resolve_ids_by_name("int")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        21
+    );
+    assert_eq!(
+        btf.resolve_ids_by_name("u64")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        36
+    );
+    assert_eq!(
+        btf.resolve_ids_by_name("sk_buff")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        1768
+    );
+    assert_eq!(
+        btf.resolve_ids_by_name("kfree_skb")
+            .expect("resolve_ids_by_name failed")
+            .pop()
+            .expect("resolve_ids_by_name list is empty"),
+        26250
+    );
+
+    // resolve_type_by_id()
+    assert_eq!(btf.resolve_type_by_id(0).unwrap(), Some(Type::Void));
+    assert_eq!(btf.resolve_type_by_id(u32::MAX).unwrap(), None);
+    assert!(matches!(
+        btf.resolve_type_by_id(21).unwrap(),
+        Some(Type::Int(_))
+    ));
+    assert!(matches!(
+        btf.resolve_type_by_id(36).unwrap(),
+        Some(Type::Typedef(_))
+    ));
+    assert!(matches!(
+        btf.resolve_type_by_id(1768).unwrap(),
+        Some(Type::Struct(_))
+    ));
+    assert!(matches!(
+        btf.resolve_type_by_id(26250).unwrap(),
+        Some(Type::Func(_))
+    ));
+
+    // resolve_types_by_name()
+    assert!(btf
+        .resolve_types_by_name("not_a_known_function")
+        .unwrap()
+        .is_empty());
+
+    let mut r#int = btf.resolve_types_by_name("int").unwrap();
+    assert_eq!(r#int.len(), 1);
+    assert!(matches!(r#int.pop().unwrap(), Type::Int(_)));
+
+    let mut r#u64 = btf.resolve_types_by_name("u64").unwrap();
+    assert_eq!(r#u64.len(), 1);
+    assert!(matches!(r#u64.pop().unwrap(), Type::Typedef(_)));
+
+    let mut kfree = btf.resolve_types_by_name("kfree").unwrap();
+    assert_eq!(kfree.len(), 1);
+    assert!(matches!(kfree.pop().unwrap(), Type::Func(_)));
+
+    let mut sk_buff = btf.resolve_types_by_name("sk_buff").unwrap();
+    assert_eq!(sk_buff.len(), 1);
+    assert!(matches!(sk_buff.pop().unwrap(), Type::Struct(_)));
 }
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -133,11 +250,12 @@ fn resolve_ids_by_name(btf: Btf) {
     feature = "elf-compression",
     test_case(split_compressed_elf("zstd+zstd", "zst"))
 )]
-fn resolve_anon_types(btf: Btf) {
-    let anon_types = btf.resolve_types_by_name(ANON_TYPE_NAME).unwrap();
-    assert_ne!(anon_types.len(), 0);
+fn resolve_anon_name(btf: Btf) {
+    // Get a list of the anonymous types.
+    let types = btf.resolve_types_by_name("").unwrap();
+
     // Find an anonymous enumerator that contains the IPPROTO_IP member.
-    let sock_protos = anon_types.iter().find(|t| match t {
+    let sock_protos = types.iter().find(|t| match t {
         Type::Enum(e) => e
             .members
             .iter()
@@ -145,24 +263,106 @@ fn resolve_anon_types(btf: Btf) {
         _ => false,
     });
     assert!(sock_protos.is_some());
-    if let Type::Enum(e) = sock_protos.unwrap() {
-        assert_eq!(
+
+    // Check name bijection.
+    match sock_protos {
+        Some(Type::Enum(e)) => assert_eq!(
             btf.resolve_name(e).expect("resolve name failed"),
-            ANON_TYPE_NAME.to_string()
-        );
-    } else {
-        panic!("not an enum");
+            "".to_string()
+        ),
+        _ => panic!("not an enum"),
     }
+
+    // Get a type without a name which is not anonymous. It's a const.
+    match btf.resolve_type_by_id(4).unwrap() {
+        Some(Type::Const(c)) => assert!(btf.resolve_name(&c).is_err()),
+        _ => panic!("not a const"),
+    }
+
+    // Get a list of the anonymous ids.
+    let ids = btf.resolve_ids_by_name("").unwrap();
+    assert_ne!(ids.len(), 0)
 }
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
+#[test_case(split_bytes())]
+#[cfg_attr(feature = "elf", test_case(split_elf()))]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("bzip2+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("gzip+gzip", "gz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("xz+xz", "xz"))
+)]
+#[cfg_attr(
+    feature = "elf-compression",
+    test_case(split_compressed_elf("zstd+zstd", "zst"))
+)]
+#[cfg(feature = "regex")]
+fn resolve_anon_regex(btf: Btf) {
+    let re = regex::Regex::new(&format!("^$")).unwrap();
+
+    // Get a list of the anonymous types.
+    let types = btf.resolve_types_by_regex(&re).unwrap();
+
+    // Find an anonymous enumerator that contains the IPPROTO_IP member.
+    let sock_protos = types.iter().find(|t| match t {
+        Type::Enum(e) => e
+            .members
+            .iter()
+            .any(|m| btf.resolve_name(m).is_ok_and(|v| v == "IPPROTO_IP")),
+        _ => false,
+    });
+    assert!(sock_protos.is_some());
+
+    // Check name bijection.
+    match sock_protos {
+        Some(Type::Enum(e)) => assert_eq!(
+            btf.resolve_name(e).expect("resolve name failed"),
+            "".to_string()
+        ),
+        _ => panic!("not an enum"),
+    }
+
+    // Get a type without a name which is not anonymous. It's a const.
+    match btf.resolve_type_by_id(4).unwrap() {
+        Some(Type::Const(c)) => assert!(btf.resolve_name(&c).is_err()),
+        _ => panic!("not a const"),
+    }
+
+    // Get a list of the anonymous ids.
+    let ids = btf.resolve_ids_by_regex(&re).unwrap();
+    assert_ne!(ids.len(), 0);
+}
+
+#[test_case(bytes())]
+#[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
+#[cfg_attr(feature = "elf", test_case(elf()))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
+#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
+#[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -183,7 +383,12 @@ fn resolve_anon_types(btf: Btf) {
 )]
 fn iter_types(btf: Btf) {
     // Iterate without looping ensuring non BtfTypes return None.
-    let kfree = match btf.resolve_types_by_name("kfree").unwrap().pop().unwrap() {
+    let kfree = match btf
+        .resolve_types_by_name("kfree")
+        .expect("resolve_types_by_name failed")
+        .pop()
+        .expect("resolve_types_by_name list is empty")
+    {
         Type::Func(kfree) => kfree,
         _ => panic!("Resolved type is not a function"),
     };
@@ -192,7 +397,11 @@ fn iter_types(btf: Btf) {
     assert!(iter.next().is_some());
     assert!(iter.next().is_none());
 
-    let r#type = btf.resolve_types_by_name("sk_buff").unwrap().pop().unwrap();
+    let r#type = btf
+        .resolve_types_by_name("sk_buff")
+        .expect("resolve_types_by_name failed")
+        .pop()
+        .expect("resolve_types_by_name list is empty");
 
     let sk_buff = match r#type {
         Type::Struct(x) => x,
@@ -214,111 +423,16 @@ fn iter_types(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
-#[test_case(split_bytes())]
-#[cfg_attr(feature = "elf", test_case(split_elf()))]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("bzip2+xz", "xz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("gzip+gzip", "gz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("xz+xz", "xz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("zstd+zstd", "zst"))
-)]
-fn resolve_types_by_name(btf: Btf) {
-    let types = btf.resolve_types_by_name("kfree").unwrap();
-    assert_eq!(types.len(), 1);
-}
-
-#[test_case(bytes())]
-#[test_case(file())]
-#[cfg_attr(feature = "elf", test_case(elf()))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
-#[test_case(split_file())]
-#[test_case(split_bytes())]
-#[cfg_attr(feature = "elf", test_case(split_elf()))]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("bzip2+xz", "xz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("gzip+gzip", "gz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("xz+xz", "xz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("zstd+zstd", "zst"))
-)]
-fn resolve_types_by_name_unknown(btf: Btf) {
-    assert!(btf
-        .resolve_types_by_name("not_a_known_function")
-        .unwrap()
-        .is_empty());
-}
-
-#[test_case(bytes())]
-#[test_case(file())]
-#[cfg_attr(feature = "elf", test_case(elf()))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
-#[test_case(split_file())]
-#[test_case(split_bytes())]
-#[cfg_attr(feature = "elf", test_case(split_elf()))]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("bzip2+xz", "xz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("gzip+gzip", "gz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("xz+xz", "xz"))
-)]
-#[cfg_attr(
-    feature = "elf-compression",
-    test_case(split_compressed_elf("zstd+zstd", "zst"))
-)]
-fn check_resolved_type(btf: Btf) {
-    let mut r#type = btf.resolve_types_by_name("sk_buff").unwrap();
-
-    match r#type.pop().unwrap() {
-        Type::Struct(_) => (),
-        _ => panic!("Resolved type is not a struct"),
-    }
-}
-
-#[test_case(bytes())]
-#[test_case(file())]
-#[cfg_attr(feature = "elf", test_case(elf()))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
-#[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
-#[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -338,16 +452,25 @@ fn check_resolved_type(btf: Btf) {
     test_case(split_compressed_elf("zstd+zstd", "zst"))
 )]
 fn bijection(btf: Btf) {
-    let func = match btf.resolve_types_by_name("kfree").unwrap().pop().unwrap() {
+    let func = match btf
+        .resolve_types_by_name("kfree")
+        .expect("resolve_types_by_name failed")
+        .pop()
+        .expect("resolve_types_by_name list is empty")
+    {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
     assert_eq!(btf.resolve_name(&func).unwrap(), "kfree");
 
-    let func_id = btf.resolve_ids_by_name("kfree").pop().unwrap();
+    let func_id = btf
+        .resolve_ids_by_name("kfree")
+        .expect("resolve_ids_by_name failed")
+        .pop()
+        .expect("resolve_ids_by_name list is empty");
     let func = match btf.resolve_type_by_id(func_id).unwrap() {
-        Type::Func(func) => func,
+        Some(Type::Func(func)) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
@@ -356,12 +479,16 @@ fn bijection(btf: Btf) {
 
 #[test_case(bytes())]
 #[test_case(file())]
+#[test_case(file_cache())]
+#[test_case(file_mmap())]
 #[cfg_attr(feature = "elf", test_case(elf()))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("bzip2+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("gzip+gzip")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("xz+xz")))]
 #[cfg_attr(feature = "elf-compression", test_case(compressed_elf("zstd+zstd")))]
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -383,9 +510,9 @@ fn bijection(btf: Btf) {
 fn resolve_function(btf: Btf) {
     let func = match btf
         .resolve_types_by_name("kfree_skb_reason")
-        .unwrap()
+        .expect("resolve_types_by_name failed")
         .pop()
-        .unwrap()
+        .expect("resolve_types_by_name list is empty")
     {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
@@ -407,7 +534,7 @@ fn resolve_function(btf: Btf) {
     assert!(!proto.parameters[1].is_variadic());
 
     match btf.resolve_type_by_id(proto.return_type_id()).unwrap() {
-        Type::Void => (),
+        Some(Type::Void) => (),
         _ => panic!("Resolved type is not void"),
     }
 
@@ -444,11 +571,15 @@ fn resolve_function(btf: Btf) {
 }
 
 #[test]
-fn wrong_file() {
+fn wrong_cache() {
     assert!(Btf::from_file("/does/not/exist").is_err());
+    assert!(BtfCollection::from_file("/does/not/exist").is_err());
+    assert!(BtfCollection::from_dir("/does/not/exist", "foo").is_err());
 }
 
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -470,9 +601,9 @@ fn wrong_file() {
 fn resolve_split_struct(btf: Btf) {
     let r#struct = btf
         .resolve_types_by_name("datapath")
-        .unwrap()
+        .expect("resolve_types_by_name failed")
         .pop()
-        .unwrap();
+        .expect("resolve_types_by_name list is empty");
     let expected = &[
         "rcu",
         "list_node",
@@ -504,6 +635,8 @@ fn resolve_split_struct(btf: Btf) {
 }
 
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -531,9 +664,9 @@ fn resolve_split_func(btf: Btf) {
 
     let func = match btf
         .resolve_types_by_name("queue_userspace_packet")
-        .unwrap()
+        .expect("resolve_types_by_name failed")
         .pop()
-        .unwrap()
+        .expect("resolve_types_by_name list is empty")
     {
         Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
@@ -555,7 +688,7 @@ fn resolve_split_func(btf: Btf) {
     assert!(!proto.parameters[1].is_variadic());
 
     match btf.resolve_type_by_id(proto.return_type_id()).unwrap() {
-        Type::Int(_) => (),
+        Some(Type::Int(_)) => (),
         _ => panic!("Resolved type is not int"),
     }
 
@@ -580,6 +713,8 @@ fn resolve_split_func(btf: Btf) {
 }
 
 #[test_case(split_file())]
+#[test_case(split_file_cache())]
+#[test_case(split_file_mmap())]
 #[test_case(split_bytes())]
 #[cfg_attr(feature = "elf", test_case(split_elf()))]
 #[cfg_attr(
@@ -606,7 +741,7 @@ fn resolve_regex(btf: Btf) {
     // - skb_drop_reason
     // - ovs_drop_reason
     let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
-    let ids = btf.resolve_ids_by_regex(&re);
+    let ids = btf.resolve_ids_by_regex(&re).unwrap();
     assert!(ids.len() >= 2);
 
     let types = btf
@@ -631,44 +766,72 @@ fn resolve_regex(btf: Btf) {
     assert!(reasons.is_empty());
 }
 
-fn btfc_files() -> utils::collection::BtfCollection {
-    let mut btfc = utils::collection::BtfCollection::from_file("tests/assets/btf/vmlinux").unwrap();
+fn btfc_files() -> BtfCollection {
+    let mut btfc = BtfCollection::from_file("tests/assets/btf/vmlinux").unwrap();
     btfc.add_split_btf_from_file("tests/assets/btf/openvswitch")
         .unwrap();
     btfc
 }
 
-fn btfc_bytes() -> utils::collection::BtfCollection {
-    let mut btfc = utils::collection::BtfCollection::from_bytes(
-        "vmlinux",
-        &read("tests/assets/btf/vmlinux").unwrap(),
-    )
-    .unwrap();
-    btfc.add_split_btf_from_bytes(
-        "openvswitch",
-        &read("tests/assets/btf/openvswitch").unwrap(),
-    )
-    .unwrap();
+fn btfc_files_cache() -> BtfCollection {
+    let mut btfc =
+        BtfCollection::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Cache).unwrap();
+    btfc.add_split_btf_from_file("tests/assets/btf/openvswitch")
+        .unwrap();
     btfc
 }
 
-fn btfc_dir() -> utils::collection::BtfCollection {
-    utils::collection::BtfCollection::from_dir("tests/assets/btf", "vmlinux").unwrap()
+fn btfc_files_mmap() -> BtfCollection {
+    let mut btfc =
+        BtfCollection::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Mmap).unwrap();
+    btfc.add_split_btf_from_file("tests/assets/btf/openvswitch")
+        .unwrap();
+    btfc
+}
+
+fn btfc_bytes() -> BtfCollection {
+    let mut btfc = BtfCollection::from_bytes(
+        "vmlinux",
+        &read("tests/assets/btf/vmlinux").expect("read failed"),
+    )
+    .expect("BtfCollection construction failed");
+    btfc.add_split_btf_from_bytes(
+        "openvswitch",
+        &read("tests/assets/btf/openvswitch").expect("read failed"),
+    )
+    .expect("split btf addition failed");
+    btfc
+}
+
+fn btfc_dir() -> BtfCollection {
+    BtfCollection::from_dir("tests/assets/btf", "vmlinux").unwrap()
+}
+
+fn btfc_dir_cache() -> BtfCollection {
+    BtfCollection::from_dir_with_backend("tests/assets/btf", "vmlinux", Backend::Cache).unwrap()
+}
+
+fn btfc_dir_mmap() -> BtfCollection {
+    BtfCollection::from_dir_with_backend("tests/assets/btf", "vmlinux", Backend::Mmap).unwrap()
 }
 
 #[cfg(feature = "elf")]
-fn btfc_elf() -> utils::collection::BtfCollection {
+fn btfc_elf() -> BtfCollection {
     utils::elf::collection_from_kernel_dir("tests/assets/elf/uncompressed").unwrap()
 }
 
 #[cfg(feature = "elf-compression")]
-fn btfc_compressed_elf(alg: &str) -> utils::collection::BtfCollection {
+fn btfc_compressed_elf(alg: &str) -> BtfCollection {
     utils::elf::collection_from_kernel_dir(format!("tests/assets/elf/{alg}")).unwrap()
 }
 
 #[test_case(btfc_files())]
+#[test_case(btfc_files_cache())]
+#[test_case(btfc_files_mmap())]
 #[test_case(btfc_bytes())]
 #[test_case(btfc_dir())]
+#[test_case(btfc_dir_cache())]
+#[test_case(btfc_dir_mmap())]
 #[cfg_attr(feature = "elf", test_case(btfc_elf()))]
 #[cfg_attr(
     feature = "elf-compression",
@@ -683,7 +846,7 @@ fn btfc_compressed_elf(alg: &str) -> utils::collection::BtfCollection {
     feature = "elf-compression",
     test_case(btfc_compressed_elf("zstd+zstd"))
 )]
-fn btfc(btfc: utils::collection::BtfCollection) {
+fn btfc(btfc: BtfCollection) {
     // Resolve a function from vmlinux.
     let mut types = btfc.resolve_types_by_name("kfree").unwrap();
     let (nbtf, func) = match types.pop().unwrap() {
@@ -693,9 +856,13 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 
     assert_eq!(nbtf.resolve_name(&func).unwrap(), "kfree");
 
-    let (nbtf, func_id) = btfc.resolve_ids_by_name("kfree").pop().unwrap();
+    let (nbtf, func_id) = btfc
+        .resolve_ids_by_name("kfree")
+        .expect("resolve_ids_by_name failed")
+        .pop()
+        .expect("resolve_ids_by_name list is empty");
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
-        Type::Func(func) => func,
+        Some(Type::Func(func)) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
@@ -714,10 +881,11 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 
     let (nbtf, func_id) = btfc
         .resolve_ids_by_name("queue_userspace_packet")
+        .expect("resolve_ids_by_name failed")
         .pop()
-        .unwrap();
+        .expect("resolve_ids_by_name list is empty");
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
-        Type::Func(func) => func,
+        Some(Type::Func(func)) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
@@ -736,8 +904,12 @@ fn btfc(btfc: utils::collection::BtfCollection) {
 }
 
 #[test_case(btfc_files())]
+#[test_case(btfc_files_cache())]
+#[test_case(btfc_files_mmap())]
 #[test_case(btfc_bytes())]
 #[test_case(btfc_dir())]
+#[test_case(btfc_dir_cache())]
+#[test_case(btfc_dir_mmap())]
 #[cfg_attr(feature = "elf", test_case(btfc_elf()))]
 #[cfg_attr(
     feature = "elf-compression",
@@ -753,14 +925,14 @@ fn btfc(btfc: utils::collection::BtfCollection) {
     test_case(btfc_compressed_elf("zstd+zstd"))
 )]
 #[cfg(feature = "regex")]
-fn btfc_resolve_regex(btfc: utils::collection::BtfCollection) {
+fn btfc_resolve_regex(btfc: BtfCollection) {
     use std::collections::HashSet;
 
     // Look for drop reason enums:
     // - skb_drop_reason
     // - ovs_drop_reason
     let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
-    let ids = btfc.resolve_ids_by_regex(&re);
+    let ids = btfc.resolve_ids_by_regex(&re).unwrap();
     assert!(ids.len() >= 2);
 
     let types = btfc
