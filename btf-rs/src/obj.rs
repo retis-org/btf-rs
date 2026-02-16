@@ -302,6 +302,8 @@ impl MmapBtfObj {
         // Then sanity check the string section.
         let offset = u64::checked_add(header.hdr_len as u64, header.str_off as u64)
             .ok_or(Error::Format("Invalid strings section offset".to_string()))?;
+        let offset = u64::checked_add(offset, header.str_len as u64)
+            .ok_or(Error::Format("Invalid strings section length".to_string()))?;
         if len < offset as usize {
             return Err(Error::Format(
                 "String section is missing or incomplete".to_string(),
