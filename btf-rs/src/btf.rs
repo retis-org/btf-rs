@@ -11,7 +11,7 @@ use std::{
 
 use memmap2::MmapOptions;
 
-use crate::{cbtf, obj::BtfObj, Error, Result};
+use crate::{cbtf, section::BtfSection, Error, Result};
 
 /// Backend used by the `Btf` object to store and access the underlying BTF
 /// information.
@@ -30,8 +30,8 @@ pub enum Backend {
 /// Main representation of a parsed BTF object. Provides helpers to resolve
 /// types and their associated names.
 pub struct Btf {
-    obj: Arc<BtfObj>,
-    base: Option<Arc<BtfObj>>,
+    obj: Arc<BtfSection>,
+    base: Option<Arc<BtfSection>>,
 }
 
 impl Btf {
@@ -51,9 +51,9 @@ impl Btf {
         Ok(Btf {
             obj: Arc::new(match backend {
                 Backend::Cache => {
-                    BtfObj::from_reader(&mut BufReader::new(File::open(path)?), None)?
+                    BtfSection::from_reader(&mut BufReader::new(File::open(path)?), None)?
                 }
-                Backend::Mmap => BtfObj::from_mmap(
+                Backend::Mmap => BtfSection::from_mmap(
                     unsafe { MmapOptions::new().map_copy_read_only(&File::open(path)?)? },
                     None,
                 )?,
@@ -70,7 +70,7 @@ impl Btf {
         }
 
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(
+            obj: Arc::new(BtfSection::from_reader(
                 &mut BufReader::new(File::open(path)?),
                 Some(base.obj.clone()),
             )?),
@@ -82,7 +82,7 @@ impl Btf {
     /// slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Btf> {
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(&mut Cursor::new(bytes), None)?),
+            obj: Arc::new(BtfSection::from_reader(&mut Cursor::new(bytes), None)?),
             base: None,
         })
     }
@@ -96,7 +96,7 @@ impl Btf {
 
         let base = base.obj.clone();
         Ok(Btf {
-            obj: Arc::new(BtfObj::from_reader(
+            obj: Arc::new(BtfSection::from_reader(
                 &mut Cursor::new(bytes),
                 Some(base.clone()),
             )?),
@@ -104,12 +104,26 @@ impl Btf {
         })
     }
 
+    /// Returns a reference to the base `BtfSection`.
+    pub fn base(&self) -> &BtfSection {
+        match &self.base {
+            Some(base) => base,
+            None => &self.obj,
+        }
+    }
+
+    /// Returns a reference to the split `BtfSection`, if any.
+    pub fn split(&self) -> Option<&BtfSection> {
+        self.base.as_ref()?;
+        Some(&self.obj)
+    }
+
     /// Find a list of BTF ids using their name as a key.
     ///
     /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
     /// allowing it).
     pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
-        let mut ids = self.resolve_split_ids_by_name(name)?;
+        let mut ids = self.obj.resolve_ids_by_name(name)?;
 
         if let Some(base) = &self.base {
             ids.append(&mut base.resolve_ids_by_name(name)?);
@@ -118,32 +132,19 @@ impl Btf {
         Ok(ids)
     }
 
-    // Find a list of BTF ids using their name as a key, using the split BTF
-    // definition only. For internal use only.
-    pub(crate) fn resolve_split_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
-        self.obj.resolve_ids_by_name(name)
-    }
-
     /// Find a list of BTF ids whose names match a regex.
     ///
     /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
     /// allowing it).
     #[cfg(feature = "regex")]
     pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
-        let mut ids = self.resolve_split_ids_by_regex(re)?;
+        let mut ids = self.obj.resolve_ids_by_regex(re)?;
 
         if let Some(base) = &self.base {
             ids.append(&mut base.resolve_ids_by_regex(re)?);
         }
 
         Ok(ids)
-    }
-
-    // Find a list of BTF ids whose names match a regex, using the split BTF
-    // definition only. For internal use only.
-    #[cfg(feature = "regex")]
-    pub(crate) fn resolve_split_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
-        self.obj.resolve_ids_by_regex(re)
     }
 
     /// Find a BTF type using its id as a key.
@@ -162,7 +163,7 @@ impl Btf {
     /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
     /// allowing it).
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
-        let mut types = self.resolve_split_types_by_name(name)?;
+        let mut types = self.obj.resolve_types_by_name(name)?;
 
         if let Some(base) = &self.base {
             types.append(&mut base.resolve_types_by_name(name)?);
@@ -171,32 +172,19 @@ impl Btf {
         Ok(types)
     }
 
-    // Find a list of BTF types using their name as a key, using the split BTF
-    // definition only. For internal use only.
-    pub(crate) fn resolve_split_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
-        self.obj.resolve_types_by_name(name)
-    }
-
     /// Find a list of BTF types using a regex describing their name as a key.
     ///
     /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
     /// allowing it).
     #[cfg(feature = "regex")]
     pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
-        let mut types = self.resolve_split_types_by_regex(re)?;
+        let mut types = self.obj.resolve_types_by_regex(re)?;
 
         if let Some(base) = &self.base {
             types.append(&mut base.resolve_types_by_regex(re)?);
         }
 
         Ok(types)
-    }
-
-    // Find a list of BTF types using a regex describing their name as a key,
-    // using the split BTF definition only. For internal use only.
-    #[cfg(feature = "regex")]
-    pub(crate) fn resolve_split_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
-        self.obj.resolve_types_by_regex(re)
     }
 
     /// Resolve a name referenced by a Type which is defined in the current BTF
@@ -207,6 +195,17 @@ impl Btf {
                 .resolve_name(r#type)
                 .or_else(|_| self.obj.resolve_name(r#type)),
             None => self.obj.resolve_name(r#type),
+        }
+    }
+
+    /// Return an iterator over all types defined in the current BTF object.
+    pub fn iter_types(&self) -> TypesIter<'_> {
+        let (start, _) = self.obj.type_id_range();
+
+        TypesIter {
+            section: &self.obj,
+            next_section: self.base.as_ref().map(|s| s.as_ref()),
+            current: start,
         }
     }
 
@@ -223,22 +222,49 @@ impl Btf {
     /// This helper returns an iterator that allow to resolve a Type
     /// referenced in another one all the way down to the chain.
     /// The helper makes use of [`Btf::resolve_chained_type`].
-    pub fn type_iter<T: BtfType + ?Sized>(&self, r#type: &T) -> TypeIter<'_> {
-        TypeIter {
+    pub fn iter_chained_types<T: BtfType + ?Sized>(&self, r#type: &T) -> ChainedTypesIter<'_> {
+        ChainedTypesIter {
             btf: self,
             r#type: self.resolve_chained_type(r#type).ok(),
         }
     }
 }
 
-/// Iterator type returned by [`Btf::type_iter`].
-pub struct TypeIter<'a> {
+/// Iterator over BTF types.
+pub struct TypesIter<'a> {
+    pub(crate) section: &'a BtfSection,
+    pub(crate) next_section: Option<&'a BtfSection>,
+    pub(crate) current: u32,
+}
+
+impl Iterator for TypesIter<'_> {
+    type Item = Type;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Ok(r#type) = self.section.resolve_type_by_id(self.current) {
+            self.current += 1;
+            return Some(r#type);
+        }
+
+        let (_, end) = self.section.type_id_range();
+        if end != self.current - 1 {
+            return None;
+        }
+
+        self.section = self.next_section.take()?;
+        (self.current, _) = self.section.type_id_range();
+
+        self.next()
+    }
+}
+
+/// Iterator type returned by [`Btf::iter_chained_types`].
+pub struct ChainedTypesIter<'a> {
     btf: &'a Btf,
     r#type: Option<Type>,
 }
 
-/// Iterator for [`TypeIter`].
-impl Iterator for TypeIter<'_> {
+impl Iterator for ChainedTypesIter<'_> {
     type Item = Type;
 
     fn next(&mut self) -> Option<Self::Item> {
