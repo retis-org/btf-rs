@@ -214,13 +214,6 @@ impl btf_header {
             endianness,
         ))
     }
-
-    // Estimates the number of strings and types defined in the BTF object.
-    pub(super) fn estimates(&self) -> (usize, usize) {
-        let strings = self.str_len as usize / 15;
-        let types = self.type_len as usize / 22;
-        (strings, types)
-    }
 }
 
 // Skip a BTF type defined in the provided seekable reader.

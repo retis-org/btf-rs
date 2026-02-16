@@ -91,14 +91,10 @@ fn main() -> Result<()> {
     }
 
     test!("Btf::resolve_type_by_id", args.iterations, {
-        let _ = btf
-            .resolve_type_by_id(args.id)?
-            .expect("Type not found by id");
+        let _ = btf.resolve_type_by_id(args.id)?;
     });
 
-    let r#type = btf
-        .resolve_type_by_id(args.id)?
-        .expect("Type not found by id");
+    let r#type = btf.resolve_type_by_id(args.id)?;
     test!("Btf::resolve_name", args.iterations, {
         let _ = btf
             .resolve_name(

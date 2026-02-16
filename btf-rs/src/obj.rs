@@ -1,4 +1,5 @@
 use std::{
+    cmp,
     collections::HashMap,
     ffi::CStr,
     io::{BufRead, Cursor, Seek, SeekFrom},
@@ -46,10 +47,7 @@ impl BtfObj {
         self.resolve_ids_by_name(name)?
             .iter()
             .try_for_each(|id| -> Result<()> {
-                types.push(
-                    self.resolve_type_by_id(*id)?
-                        .ok_or(Error::InvalidType(*id))?,
-                );
+                types.push(self.resolve_type_by_id(*id)?);
                 Ok(())
             })?;
         Ok(types)
@@ -72,10 +70,7 @@ impl BtfObj {
         self.resolve_ids_by_regex(re)?
             .iter()
             .try_for_each(|id| -> Result<()> {
-                types.push(
-                    self.resolve_type_by_id(*id)?
-                        .ok_or(Error::InvalidType(*id))?,
-                );
+                types.push(self.resolve_type_by_id(*id)?);
                 Ok(())
             })?;
         Ok(types)
@@ -92,7 +87,7 @@ pub(super) trait BtfBackend {
     // Find a list of BTF ids using their name as a key.
     fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>>;
     // Find a BTF type using its id as a key.
-    fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>>;
+    fn resolve_type_by_id(&self, id: u32) -> Result<Type>;
     // Resolve a name using its offset.
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String>;
     // Find a list of BTF ids whose names match a regex.
@@ -130,11 +125,18 @@ impl CachedBtfObj {
                 header.version
             )));
         }
-        let (est_str, est_ty) = header.estimates();
+        if header.flags != 0 {
+            return Err(Error::Format(format!(
+                "Unsupported flags {:#x}",
+                header.flags
+            )));
+        }
+        let (est_str, est_ty) = estimate(&header);
 
         // Cache the str section for later use (name resolution).
-        let offset = header.hdr_len + header.str_off;
-        reader.seek(SeekFrom::Start(offset as u64))?;
+        let offset = u64::checked_add(header.hdr_len as u64, header.str_off as u64)
+            .ok_or(Error::Format("Invalid strings section offset".to_string()))?;
+        reader.seek(SeekFrom::Start(offset))?;
 
         let mut str_cache = HashMap::with_capacity(est_str);
         let mut offset: u32 = 0;
@@ -156,8 +158,9 @@ impl CachedBtfObj {
         }
 
         // Finally build our representation of the BTF types.
-        let offset = header.hdr_len + header.type_off;
-        reader.seek(SeekFrom::Start(offset as u64))?;
+        let offset = u64::checked_add(header.hdr_len as u64, header.type_off as u64)
+            .ok_or(Error::Format("Invalid types section offset".to_string()))?;
+        reader.seek(SeekFrom::Start(offset))?;
 
         let mut strings: HashMap<String, Vec<u32>> = HashMap::with_capacity(est_str);
         let mut types = Vec::with_capacity(est_ty);
@@ -168,7 +171,8 @@ impl CachedBtfObj {
             types.push(Type::Void);
         }
 
-        let end_type_section = offset as u64 + header.type_len as u64;
+        let end_type_section = u64::checked_add(offset, header.type_len as u64)
+            .ok_or(Error::Format("Invalid types section length".to_string()))?;
         while reader.stream_position()? < end_type_section {
             let bt = cbtf::btf_type::from_reader(reader, &endianness)?;
             let r#type = Type::from_reader(reader, &endianness, bt)?;
@@ -225,14 +229,16 @@ impl BtfBackend for CachedBtfObj {
         Ok(self.strings.get(name).cloned().unwrap_or_default())
     }
 
-    fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
-        Ok(self
-            .types
-            .get(
-                id.checked_sub(self.type_offset)
-                    .ok_or(Error::InvalidType(id))? as usize,
-            )
-            .cloned())
+    fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
+        let local_id = match id.checked_sub(self.type_offset) {
+            Some(id) if (id as usize) < self.types() => id,
+            _ => return Err(Error::InvalidType(id)),
+        };
+
+        self.types
+            .get(local_id as usize)
+            .cloned()
+            .ok_or(Error::InvalidType(id))
     }
 
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
@@ -285,23 +291,33 @@ impl MmapBtfObj {
                 header.version
             )));
         }
-        let (_, est_ty) = header.estimates();
+        if header.flags != 0 {
+            return Err(Error::Format(format!(
+                "Unsupported flags {:#x}",
+                header.flags
+            )));
+        }
+        let (_, est_ty) = estimate(&header);
 
         // Then sanity check the string section.
-        if len < (header.str_len + header.str_off) as usize {
+        let offset = u64::checked_add(header.hdr_len as u64, header.str_off as u64)
+            .ok_or(Error::Format("Invalid strings section offset".to_string()))?;
+        if len < offset as usize {
             return Err(Error::Format(
                 "String section is missing or incomplete".to_string(),
             ));
         }
 
         // Finally build our representation of the BTF types.
-        let offset = header.hdr_len + header.type_off;
-        reader.seek(SeekFrom::Start(offset as u64))?;
+        let offset = u64::checked_add(header.hdr_len as u64, header.type_off as u64)
+            .ok_or(Error::Format("Invalid types section offset".to_string()))?;
+        reader.seek(SeekFrom::Start(offset))?;
 
         let mut offsets = Vec::with_capacity(est_ty);
         let mut types = 0;
 
-        let end_type_section = (offset + header.type_len) as u64;
+        let end_type_section = u64::checked_add(offset, header.type_len as u64)
+            .ok_or(Error::Format("Invalid types section length".to_string()))?;
         while reader.stream_position()? < end_type_section {
             offsets.push(reader.stream_position()? as usize);
             cbtf::btf_skip_type(&mut reader, &endianness)?;
@@ -380,24 +396,26 @@ impl BtfBackend for MmapBtfObj {
         Ok(ids)
     }
 
-    fn resolve_type_by_id(&self, id: u32) -> Result<Option<Type>> {
-        let id = id
-            .checked_sub(self.type_offset)
-            .ok_or(Error::InvalidType(id))? as usize;
+    fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
+        let local_id = match id.checked_sub(self.type_offset) {
+            Some(id) if (id as usize) < self.types() => id,
+            _ => return Err(Error::InvalidType(id)),
+        };
+
         if id == 0 {
-            return Ok(Some(Type::Void));
+            return Ok(Type::Void);
         }
 
-        Ok(match self.type_offsets.get(id - 1) {
+        Ok(match self.type_offsets.get(local_id as usize - 1) {
             Some(offset) => {
                 let bt = cbtf::btf_type::from_bytes(&self.mmap[*offset..], &self.endianness)?;
-                Some(Type::from_bytes(
+                Type::from_bytes(
                     &self.mmap[(*offset + mem::size_of::<cbtf::btf_type>())..],
                     &self.endianness,
                     bt,
-                )?)
+                )?
             }
-            None => None,
+            None => return Err(Error::InvalidType(id)),
         })
     }
 
@@ -426,6 +444,19 @@ impl BtfBackend for MmapBtfObj {
         })?;
         Ok(ids)
     }
+}
+
+// Estimate the number of strings and types defined in the BTF object.
+fn estimate(header: &cbtf::btf_header) -> (usize, usize) {
+    let mut strings = header.str_len as usize / 15;
+    let mut types = header.type_len as usize / 22;
+
+    // Cap at 16MB.
+    const MAX_SIZE: usize = 16 * 1024 * 1024;
+    strings = cmp::max(strings, MAX_SIZE / mem::size_of::<String>());
+    types = cmp::max(types, MAX_SIZE / mem::size_of::<Type>());
+
+    (strings, types)
 }
 
 // Converts a bytes array to an str representation, without copy.

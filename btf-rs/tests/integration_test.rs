@@ -178,23 +178,20 @@ fn btf_api(btf: Btf) {
     );
 
     // resolve_type_by_id()
-    assert_eq!(btf.resolve_type_by_id(0).unwrap(), Some(Type::Void));
-    assert_eq!(btf.resolve_type_by_id(u32::MAX).unwrap(), None);
-    assert!(matches!(
-        btf.resolve_type_by_id(21).unwrap(),
-        Some(Type::Int(_))
-    ));
+    assert_eq!(btf.resolve_type_by_id(0).unwrap(), Type::Void);
+    assert!(btf.resolve_type_by_id(u32::MAX).is_err());
+    assert!(matches!(btf.resolve_type_by_id(21).unwrap(), Type::Int(_)));
     assert!(matches!(
         btf.resolve_type_by_id(36).unwrap(),
-        Some(Type::Typedef(_))
+        Type::Typedef(_)
     ));
     assert!(matches!(
         btf.resolve_type_by_id(1768).unwrap(),
-        Some(Type::Struct(_))
+        Type::Struct(_)
     ));
     assert!(matches!(
         btf.resolve_type_by_id(26250).unwrap(),
-        Some(Type::Func(_))
+        Type::Func(_)
     ));
 
     // resolve_types_by_name()
@@ -275,7 +272,7 @@ fn resolve_anon_name(btf: Btf) {
 
     // Get a type without a name which is not anonymous. It's a const.
     match btf.resolve_type_by_id(4).unwrap() {
-        Some(Type::Const(c)) => assert!(btf.resolve_name(&c).is_err()),
+        Type::Const(c) => assert!(btf.resolve_name(&c).is_err()),
         _ => panic!("not a const"),
     }
 
@@ -342,7 +339,7 @@ fn resolve_anon_regex(btf: Btf) {
 
     // Get a type without a name which is not anonymous. It's a const.
     match btf.resolve_type_by_id(4).unwrap() {
-        Some(Type::Const(c)) => assert!(btf.resolve_name(&c).is_err()),
+        Type::Const(c) => assert!(btf.resolve_name(&c).is_err()),
         _ => panic!("not a const"),
     }
 
@@ -470,7 +467,7 @@ fn bijection(btf: Btf) {
         .pop()
         .expect("resolve_ids_by_name list is empty");
     let func = match btf.resolve_type_by_id(func_id).unwrap() {
-        Some(Type::Func(func)) => func,
+        Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
@@ -533,10 +530,10 @@ fn resolve_function(btf: Btf) {
     assert_eq!(btf.resolve_name(&proto.parameters[1]).unwrap(), "reason");
     assert!(!proto.parameters[1].is_variadic());
 
-    match btf.resolve_type_by_id(proto.return_type_id()).unwrap() {
-        Some(Type::Void) => (),
-        _ => panic!("Resolved type is not void"),
-    }
+    assert_eq!(
+        btf.resolve_type_by_id(proto.return_type_id()).unwrap(),
+        Type::Void
+    );
 
     let ptr = match btf.resolve_chained_type(&proto.parameters[0]).unwrap() {
         Type::Ptr(ptr) => ptr,
@@ -571,10 +568,19 @@ fn resolve_function(btf: Btf) {
 }
 
 #[test]
-fn wrong_cache() {
+fn wrong_input() {
     assert!(Btf::from_file("/does/not/exist").is_err());
     assert!(BtfCollection::from_file("/does/not/exist").is_err());
     assert!(BtfCollection::from_dir("/does/not/exist", "foo").is_err());
+
+    assert!(Btf::from_bytes(&[]).is_err());
+    assert!(BtfCollection::from_bytes("invalid", &[]).is_err());
+
+    let base = Btf::from_file("tests/assets/btf/vmlinux").unwrap();
+    assert!(Btf::from_split_bytes(&[], &base).is_err());
+
+    let mut collection = BtfCollection::from_file("tests/assets/btf/vmlinux").unwrap();
+    assert!(collection.add_split_btf_from_bytes("foo", &[]).is_err());
 }
 
 #[test_case(split_file())]
@@ -687,10 +693,10 @@ fn resolve_split_func(btf: Btf) {
     assert_eq!(btf.resolve_name(&proto.parameters[1]).unwrap(), "skb");
     assert!(!proto.parameters[1].is_variadic());
 
-    match btf.resolve_type_by_id(proto.return_type_id()).unwrap() {
-        Some(Type::Int(_)) => (),
-        _ => panic!("Resolved type is not int"),
-    }
+    assert!(matches!(
+        btf.resolve_type_by_id(proto.return_type_id()).unwrap(),
+        Type::Int(_)
+    ));
 
     assert!(matches!(
         btf.resolve_chained_type(&proto.parameters[0]).unwrap(),
@@ -862,7 +868,7 @@ fn btfc(btfc: BtfCollection) {
         .pop()
         .expect("resolve_ids_by_name list is empty");
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
-        Some(Type::Func(func)) => func,
+        Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
@@ -885,7 +891,7 @@ fn btfc(btfc: BtfCollection) {
         .pop()
         .expect("resolve_ids_by_name list is empty");
     let func = match nbtf.resolve_type_by_id(func_id).unwrap() {
-        Some(Type::Func(func)) => func,
+        Type::Func(func) => func,
         _ => panic!("Resolved type is not a function"),
     };
 
