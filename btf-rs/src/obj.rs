@@ -453,8 +453,8 @@ fn estimate(header: &cbtf::btf_header) -> (usize, usize) {
 
     // Cap at 16MB.
     const MAX_SIZE: usize = 16 * 1024 * 1024;
-    strings = cmp::max(strings, MAX_SIZE / mem::size_of::<String>());
-    types = cmp::max(types, MAX_SIZE / mem::size_of::<Type>());
+    strings = cmp::min(strings, MAX_SIZE / mem::size_of::<String>());
+    types = cmp::min(types, MAX_SIZE / mem::size_of::<Type>());
 
     (strings, types)
 }
