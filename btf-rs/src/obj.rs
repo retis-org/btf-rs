@@ -302,6 +302,8 @@ impl MmapBtfObj {
         // Then sanity check the string section.
         let offset = u64::checked_add(header.hdr_len as u64, header.str_off as u64)
             .ok_or(Error::Format("Invalid strings section offset".to_string()))?;
+        let offset = u64::checked_add(offset, header.str_len as u64)
+            .ok_or(Error::Format("Invalid strings section length".to_string()))?;
         if len < offset as usize {
             return Err(Error::Format(
                 "String section is missing or incomplete".to_string(),
@@ -453,8 +455,8 @@ fn estimate(header: &cbtf::btf_header) -> (usize, usize) {
 
     // Cap at 16MB.
     const MAX_SIZE: usize = 16 * 1024 * 1024;
-    strings = cmp::max(strings, MAX_SIZE / mem::size_of::<String>());
-    types = cmp::max(types, MAX_SIZE / mem::size_of::<Type>());
+    strings = cmp::min(strings, MAX_SIZE / mem::size_of::<String>());
+    types = cmp::min(types, MAX_SIZE / mem::size_of::<Type>());
 
     (strings, types)
 }
