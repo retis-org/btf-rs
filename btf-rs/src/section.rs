@@ -31,32 +31,30 @@ impl BtfSection {
         Ok(Self(Box::new(CachedBtfSection::new(reader, base)?)))
     }
 
-    /// Find a list of BTF ids using their name as a key.
+    /// Find a list of BTF ids with a given name.
     ///
-    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
-    /// allowing it).
+    /// Using an empty name (`""`) resolves anonymous ids.
     pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
         self.0.resolve_ids_by_name(name)
     }
 
     /// Find a list of BTF ids whose names match a regex.
     ///
-    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
-    /// allowing it).
+    /// If the regex matches the empty name (`""`), e.g. `"^$"`, the result will
+    /// contain anonymous ids.
     #[cfg(feature = "regex")]
     pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
         self.0.resolve_ids_by_regex(re)
     }
 
-    /// Find a BTF type using its id as a key.
+    /// Find a BTF type with a given id.
     pub fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
         self.0.resolve_type_by_id(id)
     }
 
-    /// Find a list of BTF types using their name as a key.
+    /// Find a list of BTF types with a given name.
     ///
-    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
-    /// allowing it).
+    /// Using an empty name (`""`) resolves anonymous types.
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         let mut types = Vec::new();
         self.resolve_ids_by_name(name)?
@@ -68,10 +66,10 @@ impl BtfSection {
         Ok(types)
     }
 
-    /// Find a list of BTF types using a regex describing their name as a key.
+    /// Find a list of BTF types whose names match a regex.
     ///
-    /// Using an empty name (`""`) resolves anonymous types (for BTF kinds
-    /// allowing it).
+    /// If the regex matches the empty name (`""`), e.g. `"^$"`, the result will
+    /// contain anonymous types.
     #[cfg(feature = "regex")]
     pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         let mut types = Vec::new();
@@ -137,9 +135,9 @@ pub(super) trait BtfBackend {
     fn type_id_offset(&self) -> u32;
     // Return the number of types in the section.
     fn types(&self) -> usize;
-    // Find a list of BTF ids using their name as a key.
+    // Find a list of BTF ids with a given name.
     fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>>;
-    // Find a BTF type using its id as a key.
+    // Find a BTF type with a given id.
     fn resolve_type_by_id(&self, id: u32) -> Result<Type>;
     // Resolve a name using its offset.
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String>;
