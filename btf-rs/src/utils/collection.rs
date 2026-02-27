@@ -188,11 +188,13 @@ impl BtfCollection {
         self.split.iter().find(|m| m.name == name)
     }
 
-    /// Find a list of BTF ids using their name as a key. Matching ids can be
-    /// found in multiple underlying BTF, thus this function returns a list of
-    /// tuples containing each a reference to [`NamedBtf`] (representing the BTF
-    /// where a match was found) and the id. Further lookups must be done using
-    /// the [`Btf`] object contained in the linked [`NamedBtf`] one.
+    /// Find a list of BTF ids with a given name.
+    ///
+    /// Matching ids can be found in multiple underlying BTF, thus this function
+    /// returns a list of tuples containing each a reference to [`NamedBtf`]
+    /// (representing the BTF where a match was found) and the id. Further
+    /// lookups must be done using the [`Btf`] object contained in the linked
+    /// [`NamedBtf`] one.
     pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, u32)>> {
         let mut ids = self
             .base
@@ -202,12 +204,13 @@ impl BtfCollection {
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
 
-        for split in self.split.iter() {
-            split
-                .btf
-                .resolve_split_ids_by_name(name)?
-                .drain(..)
-                .for_each(|i| ids.push((split, i)));
+        for btf in self.split.iter() {
+            if let Some(split) = btf.split() {
+                split
+                    .resolve_ids_by_name(name)?
+                    .drain(..)
+                    .for_each(|i| ids.push((btf, i)));
+            }
         }
 
         Ok(ids)
@@ -230,22 +233,25 @@ impl BtfCollection {
             .map(|i| (&self.base, i))
             .collect::<Vec<_>>();
 
-        for split in self.split.iter() {
-            split
-                .btf
-                .resolve_split_ids_by_regex(re)?
-                .drain(..)
-                .for_each(|i| ids.push((split, i)));
+        for btf in self.split.iter() {
+            if let Some(split) = btf.split() {
+                split
+                    .resolve_ids_by_regex(re)?
+                    .drain(..)
+                    .for_each(|i| ids.push((btf, i)));
+            }
         }
 
         Ok(ids)
     }
 
-    /// Find a list of BTF types using their name as a key. Matching types can
-    /// be found in multiple underlying BTF, thus this function returns a list
-    /// of tuples containing each a reference to [`NamedBtf`] (representing the
-    /// BTF where a match was found) and the type. Further lookups must be done
-    /// using the [`Btf`] object contained in the linked [`NamedBtf`] one.
+    /// Find a list of BTF types with a given name.
+    ///
+    /// Matching types can be found in multiple underlying BTF, thus this
+    /// function returns a list of tuples containing each a reference to
+    /// [`NamedBtf`] (representing the BTF where a match was found) and the
+    /// type. Further lookups must be done using the [`Btf`] object contained in
+    /// the linked [`NamedBtf`] one.
     pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, Type)>> {
         let mut types = self
             .base
@@ -255,18 +261,20 @@ impl BtfCollection {
             .map(|t| (&self.base, t))
             .collect::<Vec<_>>();
 
-        for split in self.split.iter() {
-            split
-                .btf
-                .resolve_split_types_by_name(name)?
-                .drain(..)
-                .for_each(|t| types.push((split, t)));
+        for btf in self.split.iter() {
+            if let Some(split) = btf.split() {
+                split
+                    .resolve_types_by_name(name)?
+                    .drain(..)
+                    .for_each(|t| types.push((btf, t)));
+            }
         }
 
         Ok(types)
     }
 
-    /// Find a list of BTF types using a regex describing their name as a key.
+    /// Find a list of BTF types whose names match a regex.
+    ///
     /// Matching types can be found in multiple underlying BTF, thus this
     /// function returns a list of tuples containing each a reference to
     /// [`NamedBtf`] (representing the BTF where a match was found) and the
@@ -282,12 +290,13 @@ impl BtfCollection {
             .map(|t| (&self.base, t))
             .collect::<Vec<_>>();
 
-        for split in self.split.iter() {
-            split
-                .btf
-                .resolve_split_types_by_regex(re)?
-                .drain(..)
-                .for_each(|t| types.push((split, t)));
+        for btf in self.split.iter() {
+            if let Some(split) = btf.split() {
+                split
+                    .resolve_types_by_regex(re)?
+                    .drain(..)
+                    .for_each(|t| types.push((btf, t)));
+            }
         }
 
         Ok(types)

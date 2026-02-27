@@ -4,7 +4,6 @@ use std::{
     ffi::CStr,
     io::{BufRead, Cursor, Seek, SeekFrom},
     mem,
-    ops::Deref,
     sync::Arc,
 };
 
@@ -12,37 +11,51 @@ use memmap2::Mmap;
 
 use crate::{btf::*, cbtf, Error, Result};
 
-// Main internal representation of a parsed BTF object.
-pub(super) struct BtfObj(Box<dyn BtfBackend + Send + Sync>);
+// Main internal representation of a parsed BTF section.
+pub struct BtfSection(Box<dyn BtfBackend + Send + Sync>);
 
-// Allow using `BtfBackend` helpers on `BtfObj`.
-impl Deref for BtfObj {
-    type Target = dyn BtfBackend;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
-
-impl BtfObj {
-    // Parse a BTF object from a mmaped file. This takes the `Mmap` ownership to
-    // allow reading the BTF data on-demand. This provides a faster
+impl BtfSection {
+    // Parse a BTF section from a mmaped file. This takes the `Mmap` ownership
+    // to allow reading the BTF data on-demand. This provides a faster
     // initialization and a lower memory footprint than `Self::from_reader`.
-    pub(super) fn from_mmap(mmap: Mmap, base: Option<Arc<BtfObj>>) -> Result<Self> {
-        Ok(Self(Box::new(MmapBtfObj::new(mmap, base)?)))
+    pub(super) fn from_mmap(mmap: Mmap, base: Option<Arc<BtfSection>>) -> Result<Self> {
+        Ok(Self(Box::new(MmapBtfSection::new(mmap, base)?)))
     }
 
-    // Parse a BTF object from a Reader. The BTF data is cached in memory. This
+    // Parse a BTF section from a Reader. The BTF data is cached in memory. This
     // provides faster API access than `Self::from_mmap`.
     pub(super) fn from_reader<R: Seek + BufRead>(
         reader: &mut R,
-        base: Option<Arc<BtfObj>>,
+        base: Option<Arc<BtfSection>>,
     ) -> Result<Self> {
-        Ok(Self(Box::new(CachedBtfObj::new(reader, base)?)))
+        Ok(Self(Box::new(CachedBtfSection::new(reader, base)?)))
     }
 
-    // Find a list of BTF types using their name as a key.
-    pub(super) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
+    /// Find a list of BTF ids with a given name.
+    ///
+    /// Using an empty name (`""`) resolves anonymous ids.
+    pub fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>> {
+        self.0.resolve_ids_by_name(name)
+    }
+
+    /// Find a list of BTF ids whose names match a regex.
+    ///
+    /// If the regex matches the empty name (`""`), e.g. `"^$"`, the result will
+    /// contain anonymous ids.
+    #[cfg(feature = "regex")]
+    pub fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>> {
+        self.0.resolve_ids_by_regex(re)
+    }
+
+    /// Find a BTF type with a given id.
+    pub fn resolve_type_by_id(&self, id: u32) -> Result<Type> {
+        self.0.resolve_type_by_id(id)
+    }
+
+    /// Find a list of BTF types with a given name.
+    ///
+    /// Using an empty name (`""`) resolves anonymous types.
+    pub fn resolve_types_by_name(&self, name: &str) -> Result<Vec<Type>> {
         let mut types = Vec::new();
         self.resolve_ids_by_name(name)?
             .iter()
@@ -53,19 +66,12 @@ impl BtfObj {
         Ok(types)
     }
 
-    // Resolve a name referenced by a Type which is defined in the current BTF
-    // object.
-    pub(super) fn resolve_name(&self, r#type: &dyn BtfType) -> Result<String> {
-        let offset = r#type
-            .get_name_offset()
-            .ok_or(Error::OpNotSupp("No name offset in type".to_string()))?;
-        self.resolve_name_by_offset(offset)
-            .ok_or(Error::InvalidString(offset))
-    }
-
-    // Find a list of BTF types using a regex describing their name as a key.
+    /// Find a list of BTF types whose names match a regex.
+    ///
+    /// If the regex matches the empty name (`""`), e.g. `"^$"`, the result will
+    /// contain anonymous types.
     #[cfg(feature = "regex")]
-    pub(super) fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
+    pub fn resolve_types_by_regex(&self, re: &regex::Regex) -> Result<Vec<Type>> {
         let mut types = Vec::new();
         self.resolve_ids_by_regex(re)?
             .iter()
@@ -75,6 +81,49 @@ impl BtfObj {
             })?;
         Ok(types)
     }
+
+    /// Return the range of the type ids contained in this section in the
+    /// (start, end) form ("start" and "end" ids are included).
+    pub fn type_id_range(&self) -> (u32, u32) {
+        let start = self.0.type_id_offset();
+        let end = start + self.0.types() as u32 - 1;
+        (start, end)
+    }
+
+    /// Return an iterator over all types defined in the current BTF section.
+    pub fn type_iter(&self) -> TypeIter<'_> {
+        let (start, _) = self.type_id_range();
+
+        TypeIter {
+            section: self,
+            next_section: None,
+            current: start,
+        }
+    }
+
+    // Resolve a name referenced by a Type which is defined in the current BTF
+    // section.
+    pub(super) fn resolve_name(&self, r#type: &dyn BtfType) -> Result<String> {
+        let offset = r#type
+            .get_name_offset()
+            .ok_or(Error::OpNotSupp("No name offset in type".to_string()))?;
+        self.resolve_name_by_offset(offset)
+            .ok_or(Error::InvalidString(offset))
+    }
+
+    fn header(&self) -> &cbtf::btf_header {
+        self.0.header()
+    }
+
+    // Return the number of types in the section.
+    fn types(&self) -> usize {
+        self.0.types()
+    }
+
+    // Resolve a name using its offset.
+    fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
+        self.0.resolve_name_by_offset(offset)
+    }
 }
 
 // Helpers implemented by BTF backends to allow querying the BTF definitions
@@ -82,11 +131,13 @@ impl BtfObj {
 pub(super) trait BtfBackend {
     // Access the BTF header as a reference.
     fn header(&self) -> &cbtf::btf_header;
-    // Return the number of types in the object.
+    // Return the type id offset.
+    fn type_id_offset(&self) -> u32;
+    // Return the number of types in the section.
     fn types(&self) -> usize;
-    // Find a list of BTF ids using their name as a key.
+    // Find a list of BTF ids with a given name.
     fn resolve_ids_by_name(&self, name: &str) -> Result<Vec<u32>>;
-    // Find a BTF type using its id as a key.
+    // Find a BTF type with a given id.
     fn resolve_type_by_id(&self, id: u32) -> Result<Type>;
     // Resolve a name using its offset.
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String>;
@@ -95,10 +146,10 @@ pub(super) trait BtfBackend {
     fn resolve_ids_by_regex(&self, re: &regex::Regex) -> Result<Vec<u32>>;
 }
 
-// Backend for a parsed BTF object with all its types and strings cached in
+// Backend for a parsed BTF section with all its types and strings cached in
 // memory. This provides faster API performances at the cost of slower
 // initialization and increase in memory footprint.
-struct CachedBtfObj {
+struct CachedBtfSection {
     header: cbtf::btf_header,
     // Type id offset from the base, 0 if not.
     type_offset: u32,
@@ -114,8 +165,8 @@ struct CachedBtfObj {
     types: Vec<Type>,
 }
 
-impl CachedBtfObj {
-    fn new<R: Seek + BufRead>(reader: &mut R, base: Option<Arc<BtfObj>>) -> Result<Self> {
+impl CachedBtfSection {
+    fn new<R: Seek + BufRead>(reader: &mut R, base: Option<Arc<BtfSection>>) -> Result<Self> {
         // First parse the BTF header, retrieve the endianness & perform sanity
         // checks.
         let (header, endianness) = cbtf::btf_header::from_reader(reader)?;
@@ -216,9 +267,13 @@ impl CachedBtfObj {
     }
 }
 
-impl BtfBackend for CachedBtfObj {
+impl BtfBackend for CachedBtfSection {
     fn header(&self) -> &cbtf::btf_header {
         &self.header
+    }
+
+    fn type_id_offset(&self) -> u32 {
+        self.type_offset
     }
 
     fn types(&self) -> usize {
@@ -259,17 +314,17 @@ impl BtfBackend for CachedBtfObj {
     }
 }
 
-// Backend for a parsed BTF object keeping the input data memory-mapped. This
+// Backend for a parsed BTF section keeping the input data memory-mapped. This
 // provides a faster initialization and lower memory footprint at the cost of
 // slower API performances.
-struct MmapBtfObj {
+struct MmapBtfSection {
     endianness: cbtf::Endianness,
     header: cbtf::btf_header,
     // String offset from the base, 0 if not.
     str_offset: u32,
     // Type id offset from the base, 0 if not.
     type_offset: u32,
-    // Number of types defined in the object.
+    // Number of types defined in the section.
     types: usize,
     // Memory-mapped reader.
     mmap: Mmap,
@@ -277,8 +332,8 @@ struct MmapBtfObj {
     type_offsets: Vec<usize>,
 }
 
-impl MmapBtfObj {
-    fn new(mmap: Mmap, base: Option<Arc<BtfObj>>) -> Result<Self> {
+impl MmapBtfSection {
+    fn new(mmap: Mmap, base: Option<Arc<BtfSection>>) -> Result<Self> {
         let len = mmap.len();
         let mut reader = Cursor::new(mmap);
 
@@ -373,13 +428,17 @@ impl MmapBtfObj {
     }
 }
 
-impl BtfBackend for MmapBtfObj {
+impl BtfBackend for MmapBtfSection {
     fn header(&self) -> &cbtf::btf_header {
         &self.header
     }
 
+    fn type_id_offset(&self) -> u32 {
+        self.type_offset
+    }
+
     fn types(&self) -> usize {
-        // Take `Type::Void` into account for base objects.
+        // Take `Type::Void` into account for base sections.
         (if self.type_offset != 0 { 0 } else { 1 }) + self.types
     }
 
@@ -448,7 +507,7 @@ impl BtfBackend for MmapBtfObj {
     }
 }
 
-// Estimate the number of strings and types defined in the BTF object.
+// Estimate the number of strings and types defined in the BTF section.
 fn estimate(header: &cbtf::btf_header) -> (usize, usize) {
     let mut strings = header.str_len as usize / 15;
     let mut types = header.type_len as usize / 22;
