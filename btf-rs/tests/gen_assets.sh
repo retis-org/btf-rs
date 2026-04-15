@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-version="6.15.1"
+version="7.1.1"
 tarball="linux-${version}.tar.xz"
 url="https://cdn.kernel.org/pub/linux/kernel/v6.x/${tarball}"
 
@@ -98,6 +98,6 @@ rm -f $assets/ids.rs
 get_id_by_name int
 get_id_by_name u64
 get_id_by_name sk_buff
-get_id_by_name kfree_skb_reason
+get_id_by_name sk_skb_reason_drop
 get_id_by_name ovs_drop_reason
 get_id_by_kind CONST
