@@ -5,6 +5,11 @@ use test_case::test_case;
 
 use btf_rs::{utils::collection::*, *};
 
+mod ids {
+    include!("assets/ids.rs");
+}
+use ids::*;
+
 fn bytes() -> Btf {
     Btf::from_bytes(&read("tests/assets/btf/vmlinux").expect("read failed"))
         .expect("Btf construction failed")
@@ -125,7 +130,7 @@ fn split_btf(btf: Btf) {
             .expect("resolve_ids_by_name failed")
             .pop()
             .expect("resolve_ids_by_name list is empty"),
-        21
+        BTF_ID_INT
     );
     assert_eq!(split.resolve_ids_by_name("int").unwrap().len(), 0);
 
@@ -139,16 +144,19 @@ fn split_btf(btf: Btf) {
             .expect("resolve_ids_by_name failed")
             .pop()
             .expect("resolve_ids_by_name list is empty"),
-        36009
+        BTF_ID_OVS_DROP_REASON
     );
 
     // resolve_type_by_id()
-    assert!(matches!(base.resolve_type_by_id(21).unwrap(), Type::Int(_)));
-    assert!(split.resolve_type_by_id(21).is_err());
-
-    assert!(base.resolve_type_by_id(36009).is_err());
     assert!(matches!(
-        split.resolve_type_by_id(36009).unwrap(),
+        base.resolve_type_by_id(BTF_ID_INT).unwrap(),
+        Type::Int(_)
+    ));
+    assert!(split.resolve_type_by_id(BTF_ID_INT).is_err());
+
+    assert!(base.resolve_type_by_id(BTF_ID_OVS_DROP_REASON).is_err());
+    assert!(matches!(
+        split.resolve_type_by_id(BTF_ID_OVS_DROP_REASON).unwrap(),
         Type::Enum(_)
     ));
 
@@ -204,7 +212,7 @@ fn split_btf(btf: Btf) {
                 .expect("resolve_ids_by_regex failed")
                 .pop()
                 .expect("resolve_ids_by_regex list is empty"),
-            21
+            BTF_ID_INT
         );
         assert_eq!(split.resolve_ids_by_regex(&re).unwrap().len(), 0);
 
@@ -216,7 +224,7 @@ fn split_btf(btf: Btf) {
                 .expect("resolve_ids_by_regex failed")
                 .pop()
                 .expect("resolve_ids_by_regex list is empty"),
-            36009
+            BTF_ID_OVS_DROP_REASON
         );
 
         // resolve_types_by_regex
@@ -300,44 +308,47 @@ fn btf_api(btf: Btf) {
             .expect("resolve_ids_by_name failed")
             .pop()
             .expect("resolve_ids_by_name list is empty"),
-        21
+        BTF_ID_INT
     );
     assert_eq!(
         btf.resolve_ids_by_name("u64")
             .expect("resolve_ids_by_name failed")
             .pop()
             .expect("resolve_ids_by_name list is empty"),
-        36
+        BTF_ID_U64
     );
     assert_eq!(
         btf.resolve_ids_by_name("sk_buff")
             .expect("resolve_ids_by_name failed")
             .pop()
             .expect("resolve_ids_by_name list is empty"),
-        1768
+        BTF_ID_SK_BUFF
     );
     assert_eq!(
-        btf.resolve_ids_by_name("kfree_skb")
+        btf.resolve_ids_by_name("kfree_skb_reason")
             .expect("resolve_ids_by_name failed")
             .pop()
             .expect("resolve_ids_by_name list is empty"),
-        26250
+        BTF_ID_KFREE_SKB_REASON
     );
 
     // resolve_type_by_id()
     assert_eq!(btf.resolve_type_by_id(0).unwrap(), Type::Void);
     assert!(btf.resolve_type_by_id(u32::MAX).is_err());
-    assert!(matches!(btf.resolve_type_by_id(21).unwrap(), Type::Int(_)));
     assert!(matches!(
-        btf.resolve_type_by_id(36).unwrap(),
+        btf.resolve_type_by_id(BTF_ID_INT).unwrap(),
+        Type::Int(_)
+    ));
+    assert!(matches!(
+        btf.resolve_type_by_id(BTF_ID_U64).unwrap(),
         Type::Typedef(_)
     ));
     assert!(matches!(
-        btf.resolve_type_by_id(1768).unwrap(),
+        btf.resolve_type_by_id(BTF_ID_SK_BUFF).unwrap(),
         Type::Struct(_)
     ));
     assert!(matches!(
-        btf.resolve_type_by_id(26250).unwrap(),
+        btf.resolve_type_by_id(BTF_ID_KFREE_SKB_REASON).unwrap(),
         Type::Func(_)
     ));
 
@@ -426,7 +437,7 @@ fn resolve_anon_name(btf: Btf) {
     }
 
     // Get a type without a name which is not anonymous. It's a const.
-    match btf.resolve_type_by_id(4).unwrap() {
+    match btf.resolve_type_by_id(BTF_ID_CONST).unwrap() {
         Type::Const(c) => assert!(btf.resolve_name(&c).is_err()),
         _ => panic!("not a const"),
     }
@@ -493,7 +504,7 @@ fn resolve_anon_regex(btf: Btf) {
     }
 
     // Get a type without a name which is not anonymous. It's a const.
-    match btf.resolve_type_by_id(4).unwrap() {
+    match btf.resolve_type_by_id(BTF_ID_CONST).unwrap() {
         Type::Const(c) => assert!(btf.resolve_name(&c).is_err()),
         _ => panic!("not a const"),
     }
