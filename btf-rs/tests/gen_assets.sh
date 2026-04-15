@@ -1,9 +1,9 @@
 #!/bin/bash
 set -ex
 
-version="6.15.1"
+version="7.2.12"
 tarball="linux-${version}.tar.xz"
-url="https://cdn.kernel.org/pub/linux/kernel/v6.x/${tarball}"
+url="https://cdn.kernel.org/pub/linux/kernel/v7.x/${tarball}"
 
 assets=$(dirname $(readlink -f $0))/assets
 builddir=$(mktemp -d -t btf-rs-XXXXXX)
@@ -98,6 +98,6 @@ rm -f $assets/ids.rs
 get_id_by_name int
 get_id_by_name u64
 get_id_by_name sk_buff
-get_id_by_name kfree_skb_reason
+get_id_by_name sk_skb_reason_drop
 get_id_by_name ovs_drop_reason
 get_id_by_kind CONST
