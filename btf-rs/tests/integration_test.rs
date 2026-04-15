@@ -27,6 +27,14 @@ fn file_mmap() -> Btf {
     Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Mmap).unwrap()
 }
 
+fn no_layout_file_cache() -> Btf {
+    Btf::from_file_with_backend("tests/assets/btf/no_layout/vmlinux", Backend::Cache).unwrap()
+}
+
+fn no_layout_file_mmap() -> Btf {
+    Btf::from_file_with_backend("tests/assets/btf/no_layout/vmlinux", Backend::Mmap).unwrap()
+}
+
 #[cfg(feature = "elf")]
 fn elf() -> Btf {
     Btf::from_bytes(
@@ -58,6 +66,18 @@ fn split_file_cache() -> Btf {
 fn split_file_mmap() -> Btf {
     let vmlinux = Btf::from_file_with_backend("tests/assets/btf/vmlinux", Backend::Mmap).unwrap();
     Btf::from_split_file("tests/assets/btf/openvswitch", &vmlinux).unwrap()
+}
+
+fn no_layout_split_file_cache() -> Btf {
+    let vmlinux =
+        Btf::from_file_with_backend("tests/assets/btf/no_layout/vmlinux", Backend::Cache).unwrap();
+    Btf::from_split_file("tests/assets/btf/no_layout/openvswitch", &vmlinux).unwrap()
+}
+
+fn no_layout_split_file_mmap() -> Btf {
+    let vmlinux =
+        Btf::from_file_with_backend("tests/assets/btf/no_layout/vmlinux", Backend::Mmap).unwrap();
+    Btf::from_split_file("tests/assets/btf/no_layout/openvswitch", &vmlinux).unwrap()
 }
 
 fn split_bytes() -> Btf {
@@ -325,11 +345,11 @@ fn btf_api(btf: Btf) {
         BTF_ID_SK_BUFF
     );
     assert_eq!(
-        btf.resolve_ids_by_name("kfree_skb_reason")
+        btf.resolve_ids_by_name("sk_skb_reason_drop")
             .expect("resolve_ids_by_name failed")
             .pop()
             .expect("resolve_ids_by_name list is empty"),
-        BTF_ID_KFREE_SKB_REASON
+        BTF_ID_SK_SKB_REASON_DROP
     );
 
     // resolve_type_by_id()
@@ -348,7 +368,7 @@ fn btf_api(btf: Btf) {
         Type::Struct(_)
     ));
     assert!(matches!(
-        btf.resolve_type_by_id(BTF_ID_KFREE_SKB_REASON).unwrap(),
+        btf.resolve_type_by_id(BTF_ID_SK_SKB_REASON_DROP).unwrap(),
         Type::Func(_)
     ));
 
@@ -381,6 +401,19 @@ fn btf_api(btf: Btf) {
     };
     let count = btf.type_iter().count().unwrap();
     assert_eq!(count, type_max as usize + 1);
+}
+
+#[test_case(no_layout_file_cache())]
+#[test_case(no_layout_file_mmap())]
+#[test_case(no_layout_split_file_cache())]
+#[test_case(no_layout_split_file_mmap())]
+fn no_layout_sanity(btf: Btf) {
+    let mut sk_buff = btf.resolve_types_by_name("sk_buff").unwrap();
+    assert_eq!(sk_buff.len(), 1);
+    assert!(matches!(sk_buff.pop().unwrap(), Type::Struct(_)));
+
+    // Iter through all the types.
+    btf.type_iter().count().unwrap();
 }
 
 #[test_case(bytes())]
@@ -672,7 +705,7 @@ fn bijection(btf: Btf) {
 )]
 fn resolve_function(btf: Btf) {
     let func = match btf
-        .resolve_types_by_name("kfree_skb_reason")
+        .resolve_types_by_name("sk_skb_reason_drop")
         .expect("resolve_types_by_name failed")
         .pop()
         .expect("resolve_types_by_name list is empty")
@@ -690,23 +723,30 @@ fn resolve_function(btf: Btf) {
         _ => panic!("Resolved type is not a function proto"),
     };
 
-    assert_eq!(proto.parameters.len(), 2);
-    assert_eq!(btf.resolve_name(&proto.parameters[0]).unwrap(), "skb");
+    assert_eq!(proto.parameters.len(), 3);
+    assert_eq!(btf.resolve_name(&proto.parameters[0]).unwrap(), "sk");
     assert!(!proto.parameters[0].is_variadic());
-    assert_eq!(btf.resolve_name(&proto.parameters[1]).unwrap(), "reason");
+    assert_eq!(btf.resolve_name(&proto.parameters[1]).unwrap(), "skb");
     assert!(!proto.parameters[1].is_variadic());
+    assert_eq!(btf.resolve_name(&proto.parameters[2]).unwrap(), "reason");
+    assert!(!proto.parameters[2].is_variadic());
 
     assert_eq!(
         btf.resolve_type_by_id(proto.return_type_id()).unwrap(),
         Type::Void
     );
 
-    let ptr = match btf.resolve_chained_type(&proto.parameters[0]).unwrap() {
+    match btf.resolve_chained_type(&proto.parameters[0]).unwrap() {
         Type::Ptr(ptr) => ptr,
         _ => panic!("Resolved type is not a pointer"),
     };
 
-    match btf.resolve_chained_type(&proto.parameters[1]).unwrap() {
+    let ptr = match btf.resolve_chained_type(&proto.parameters[1]).unwrap() {
+        Type::Ptr(ptr) => ptr,
+        _ => panic!("Resolved type is not a pointer"),
+    };
+
+    match btf.resolve_chained_type(&proto.parameters[2]).unwrap() {
         Type::Enum(_) => (),
         _ => panic!("Resolved type is not an enum"),
     }
@@ -912,6 +952,7 @@ fn resolve_regex(btf: Btf) {
     // Look for drop reason enums:
     // - skb_drop_reason
     // - ovs_drop_reason
+    // - qdisc_drop_reason
     let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
     let ids = btf.resolve_ids_by_regex(&re).unwrap();
     assert!(ids.len() >= 2);
@@ -922,9 +963,9 @@ fn resolve_regex(btf: Btf) {
         .into_iter()
         .filter(|t| matches!(t, Type::Enum(_)))
         .collect::<Vec<_>>();
-    assert_eq!(types.len(), 2);
+    assert_eq!(types.len(), 3);
 
-    let mut reasons = HashSet::from(["ovs_drop_reason", "skb_drop_reason"]);
+    let mut reasons = HashSet::from(["ovs_drop_reason", "skb_drop_reason", "qdisc_drop_reason"]);
     let get_enum_name = |r#type: &Type| {
         let r#enum = match r#type {
             Type::Enum(r#enum) => r#enum,
@@ -1103,9 +1144,10 @@ fn btfc_resolve_regex(btfc: BtfCollection) {
     // Look for drop reason enums:
     // - skb_drop_reason
     // - ovs_drop_reason
+    // - qdisc_drop_reason
     let re = regex::Regex::new(r"^[[:alnum:]]+_drop_reason$").unwrap();
     let ids = btfc.resolve_ids_by_regex(&re).unwrap();
-    assert!(ids.len() >= 2);
+    assert!(ids.len() >= 3);
 
     let types = btfc
         .resolve_types_by_regex(&re)
@@ -1113,9 +1155,9 @@ fn btfc_resolve_regex(btfc: BtfCollection) {
         .into_iter()
         .filter(|(_, t)| matches!(t, Type::Enum(_)))
         .collect::<Vec<_>>();
-    assert_eq!(types.len(), 2);
+    assert_eq!(types.len(), 3);
 
-    let mut reasons = HashSet::from(["ovs_drop_reason", "skb_drop_reason"]);
+    let mut reasons = HashSet::from(["ovs_drop_reason", "skb_drop_reason", "qdisc_drop_reason"]);
     let get_enum_name = |r#type: &(&utils::collection::NamedBtf, btf_rs::Type)| {
         let (nbtf, r#enum) = match r#type {
             (nbtf, Type::Enum(r#enum)) => (nbtf, r#enum),
