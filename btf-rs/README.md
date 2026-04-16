@@ -7,7 +7,7 @@ limited, to deal with [eBPF](https://ebpf.io) programs.
 
 ```toml
 [dependencies]
-btf-rs = "1.1"
+btf-rs = "2.0"
 ```
 
 The [integration tests](btf-rs/tests/integration_test.rs) give good examples on
