@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-version="6.15.1"
+version="7.1.1"
 tarball="linux-${version}.tar.xz"
 url="https://cdn.kernel.org/pub/linux/kernel/v6.x/${tarball}"
 
@@ -36,7 +36,7 @@ make -C $builddir olddefconfig
 
 # Compile and install into $assets/elf kernel and module images compressed with
 # various algorithms.
-build_variant() {
+build_elf_variant() {
 	echo CONFIG_KERNEL_$1=y >> $builddir/.config
 	echo CONFIG_MODULE_COMPRESS_$2=y >> $builddir/.config
 	make -C $builddir -j$(nproc)
@@ -47,10 +47,10 @@ build_variant() {
 	INSTALL_MOD_PATH=$assets/elf/$flavor make -C $builddir modules_install
 	mv $assets/elf/$flavor/lib/modules/$version/kernel $assets/elf/$flavor/
 }
-build_variant BZIP2 XZ
-build_variant XZ XZ
-build_variant GZIP GZIP
-build_variant ZSTD ZSTD
+build_elf_variant BZIP2 XZ
+build_elf_variant XZ XZ
+build_elf_variant GZIP GZIP
+build_elf_variant ZSTD ZSTD
 
 # Only keep the files we want.
 find $assets/elf -type f,l \
@@ -61,7 +61,7 @@ find $assets/elf -type f,l \
 	-delete
 find $assets/elf -type d -empty -delete
 
-# Also copy uncompressed images.
+# Also copy uncompressed ELF images.
 rm -rf $assets/elf/uncompressed
 install -D $builddir/vmlinux $assets/elf/uncompressed/vmlinux
 install -D $builddir/net/openvswitch/openvswitch.ko \
@@ -73,6 +73,31 @@ install -D $builddir/drivers/net/veth.ko \
 
 # Derive pure BTF files from the above, to allow having the same tests
 # (ids & names will match).
+install -d $assets/btf
 objcopy --dump-section .BTF=$assets/btf/vmlinux $assets/elf/uncompressed/vmlinux
 objcopy --dump-section .BTF=$assets/btf/openvswitch \
 	$assets/elf/uncompressed/kernel/net/openvswitch/openvswitch.ko
+
+# Update the BTF ids we use in the tests.
+get_id() {
+       id=$(bpftool -j btf dump file $assets/btf/vmlinux \
+	       | jq ".types[] | select($1) | .id" | head -1)
+       [ -z "$id" ] && id=$(bpftool -j btf dump file \
+               -B $assets/btf/vmlinux $assets/btf/openvswitch \
+	       | jq ".types[] | select($1) | .id" | head -1)
+       [ -z "$id" ] && { echo "Cannot find BTF id for $2"; exit -1; }
+       echo "pub(super) const BTF_ID_${2^^}: u32 = $id;" >> $assets/ids.rs
+}
+get_id_by_name() {
+	get_id ".name == \"$1\"" $1
+}
+get_id_by_kind() {
+	get_id ".kind == \"$1\"" $1
+}
+rm -f $assets/ids.rs
+get_id_by_name int
+get_id_by_name u64
+get_id_by_name sk_buff
+get_id_by_name sk_skb_reason_drop
+get_id_by_name ovs_drop_reason
+get_id_by_kind CONST
