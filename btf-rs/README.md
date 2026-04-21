@@ -1,5 +1,8 @@
 # Btf-rs
 
+[![crates.io badge](https://img.shields.io/crates/v/btf-rs)](https://crates.io/crates/btf-rs/)
+[![docs.rs badge](https://img.shields.io/docsrs/btf-rs)](https://docs.rs/btf-rs/)
+
 Rust library for the [BPF Type Format (BTF)](https://www.kernel.org/doc/html/latest/bpf/btf.html).
 The BPF Type Format is a metadata format encoding debugging information such as
 types, function prototypes, structure layouts, etc. and is often used, but not
