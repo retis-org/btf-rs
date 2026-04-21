@@ -237,10 +237,8 @@ pub(super) fn btf_skip_type<R: Read + Seek>(reader: &mut R, endianness: &Endiann
 #[cbtf_type]
 pub(super) struct btf_type {
     name_off: u32,
-    // bits 0-15:  vlen
-    // bits 16-23: unused
-    // bits 24-28: kind
-    // bits 39-30: unused
+    // bits 0-23:  vlen
+    // bits 24-30: kind
     // bit  31:    kind_flag
     info: u32,
     // union {
@@ -267,11 +265,11 @@ impl btf_type {
     }
 
     pub(super) fn vlen(&self) -> u32 {
-        self.info & 0xffff
+        self.info & 0xffffff
     }
 
     pub(super) fn kind(&self) -> u32 {
-        (self.info >> 24) & 0x1f
+        (self.info >> 24) & 0x7f
     }
 
     pub(super) fn kind_flag(&self) -> u32 {
