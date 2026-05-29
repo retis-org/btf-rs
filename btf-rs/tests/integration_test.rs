@@ -1,4 +1,4 @@
-use std::fs::read;
+use std::{assert_matches, fs::read};
 
 use fallible_iterator::FallibleIterator;
 use test_case::test_case;
@@ -168,40 +168,37 @@ fn split_btf(btf: Btf) {
     );
 
     // resolve_type_by_id()
-    assert!(matches!(
-        base.resolve_type_by_id(BTF_ID_INT).unwrap(),
-        Type::Int(_)
-    ));
+    assert_matches!(base.resolve_type_by_id(BTF_ID_INT).unwrap(), Type::Int(_));
     assert!(split.resolve_type_by_id(BTF_ID_INT).is_err());
 
     assert!(base.resolve_type_by_id(BTF_ID_OVS_DROP_REASON).is_err());
-    assert!(matches!(
+    assert_matches!(
         split.resolve_type_by_id(BTF_ID_OVS_DROP_REASON).unwrap(),
         Type::Enum(_)
-    ));
+    );
 
     // resolve_types_by_name()
-    assert!(matches!(
+    assert_matches!(
         base.resolve_types_by_name("int")
             .expect("resolve_types_by_name failed")
             .pop()
             .expect("resolve_types_by_name list is empty"),
         Type::Int(_)
-    ));
+    );
     assert_eq!(split.resolve_types_by_name("int").unwrap().len(), 0);
 
     assert_eq!(
         base.resolve_types_by_name("ovs_drop_reason").unwrap().len(),
         0
     );
-    assert!(matches!(
+    assert_matches!(
         split
             .resolve_types_by_name("ovs_drop_reason")
             .expect("resolve_types_by_name failed")
             .pop()
             .expect("resolve_types_by_name list is empty"),
         Type::Enum(_)
-    ));
+    );
 
     // type_id_range()
     let (base_start, base_end) = base.type_id_range();
@@ -249,25 +246,25 @@ fn split_btf(btf: Btf) {
 
         // resolve_types_by_regex
         let re = regex::Regex::new(r"^int$").unwrap();
-        assert!(matches!(
+        assert_matches!(
             base.resolve_types_by_regex(&re)
                 .expect("resolve_types_by_regex failed")
                 .pop()
                 .expect("resolve_types_by_regex list is empty"),
             Type::Int(_)
-        ));
+        );
         assert_eq!(split.resolve_types_by_regex(&re).unwrap().len(), 0);
 
         let re = regex::Regex::new(r"^ovs_drop_reason$").unwrap();
         assert_eq!(base.resolve_types_by_regex(&re).unwrap().len(), 0);
-        assert!(matches!(
+        assert_matches!(
             split
                 .resolve_types_by_regex(&re)
                 .expect("resolve_types_by_regex failed")
                 .pop()
                 .expect("resolve_types_by_regex list is empty"),
             Type::Enum(_)
-        ));
+        );
     }
 
     // type_iter()
@@ -280,7 +277,6 @@ fn split_btf(btf: Btf) {
     assert_eq!(count, (split_max - split_min) as usize + 1);
 }
 
-// TODO: use assert_matches! once stable.
 #[test_case(bytes())]
 #[test_case(file())]
 #[test_case(file_cache())]
@@ -355,22 +351,19 @@ fn btf_api(btf: Btf) {
     // resolve_type_by_id()
     assert_eq!(btf.resolve_type_by_id(0).unwrap(), Type::Void);
     assert!(btf.resolve_type_by_id(u32::MAX).is_err());
-    assert!(matches!(
-        btf.resolve_type_by_id(BTF_ID_INT).unwrap(),
-        Type::Int(_)
-    ));
-    assert!(matches!(
+    assert_matches!(btf.resolve_type_by_id(BTF_ID_INT).unwrap(), Type::Int(_));
+    assert_matches!(
         btf.resolve_type_by_id(BTF_ID_U64).unwrap(),
         Type::Typedef(_)
-    ));
-    assert!(matches!(
+    );
+    assert_matches!(
         btf.resolve_type_by_id(BTF_ID_SK_BUFF).unwrap(),
         Type::Struct(_)
-    ));
-    assert!(matches!(
+    );
+    assert_matches!(
         btf.resolve_type_by_id(BTF_ID_SK_SKB_REASON_DROP).unwrap(),
         Type::Func(_)
-    ));
+    );
 
     // resolve_types_by_name()
     assert!(btf
@@ -380,19 +373,19 @@ fn btf_api(btf: Btf) {
 
     let mut r#int = btf.resolve_types_by_name("int").unwrap();
     assert_eq!(r#int.len(), 1);
-    assert!(matches!(r#int.pop().unwrap(), Type::Int(_)));
+    assert_matches!(r#int.pop().unwrap(), Type::Int(_));
 
     let mut r#u64 = btf.resolve_types_by_name("u64").unwrap();
     assert_eq!(r#u64.len(), 1);
-    assert!(matches!(r#u64.pop().unwrap(), Type::Typedef(_)));
+    assert_matches!(r#u64.pop().unwrap(), Type::Typedef(_));
 
     let mut kfree = btf.resolve_types_by_name("kfree").unwrap();
     assert_eq!(kfree.len(), 1);
-    assert!(matches!(kfree.pop().unwrap(), Type::Func(_)));
+    assert_matches!(kfree.pop().unwrap(), Type::Func(_));
 
     let mut sk_buff = btf.resolve_types_by_name("sk_buff").unwrap();
     assert_eq!(sk_buff.len(), 1);
-    assert!(matches!(sk_buff.pop().unwrap(), Type::Struct(_)));
+    assert_matches!(sk_buff.pop().unwrap(), Type::Struct(_));
 
     // type_iter()
     let (_, type_max) = match btf.split() {
@@ -410,7 +403,7 @@ fn btf_api(btf: Btf) {
 fn no_layout_sanity(btf: Btf) {
     let mut sk_buff = btf.resolve_types_by_name("sk_buff").unwrap();
     assert_eq!(sk_buff.len(), 1);
-    assert!(matches!(sk_buff.pop().unwrap(), Type::Struct(_)));
+    assert_matches!(sk_buff.pop().unwrap(), Type::Struct(_));
 
     // Iter through all the types.
     btf.type_iter().count().unwrap();
@@ -899,15 +892,15 @@ fn resolve_split_func(btf: Btf) {
     assert_eq!(btf.resolve_name(&proto.parameters[1]).unwrap(), "skb");
     assert!(!proto.parameters[1].is_variadic());
 
-    assert!(matches!(
+    assert_matches!(
         btf.resolve_type_by_id(proto.return_type_id()).unwrap(),
         Type::Int(_)
-    ));
+    );
 
-    assert!(matches!(
+    assert_matches!(
         btf.resolve_chained_type(&proto.parameters[0]).unwrap(),
         Type::Ptr(_)
-    ));
+    );
 
     let ptr1 = match btf.resolve_chained_type(&proto.parameters[1]).unwrap() {
         Type::Ptr(ptr) => ptr,
