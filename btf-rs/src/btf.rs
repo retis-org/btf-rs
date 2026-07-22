@@ -264,10 +264,13 @@ impl FallibleIterator for TypeIter<'_> {
             (self.cursor, self.end) = self.section.type_id_range();
         }
 
-        let r#type = self.section.resolve_type_by_id(self.cursor)?;
+        let r#type = self.section.resolve_type_by_id(self.cursor);
         self.cursor += 1;
 
-        Ok(Some(r#type))
+        if matches!(r#type, Err(Error::UnknownKind(_))) {
+            return self.next();
+        }
+        r#type.map(Some)
     }
 }
 
@@ -332,7 +335,7 @@ impl Type {
     ) -> Result<Self> {
         // Each BTF type needs specific handling to parse its type-specific header.
         use cbtf::BtfKind;
-        Ok(match BtfKind::from_id(bt.kind())? {
+        Ok(match BtfKind::from_id(bt.kind()) {
             BtfKind::Int => Type::Int(Int::from_reader(reader, endianness, bt)?),
             BtfKind::Ptr => Type::Ptr(Ptr::new(bt)),
             BtfKind::Array => Type::Array(Array::from_reader(reader, endianness, bt)?),
@@ -352,6 +355,7 @@ impl Type {
             BtfKind::DeclTag => Type::DeclTag(DeclTag::from_reader(reader, endianness, bt)?),
             BtfKind::TypeTag => Type::TypeTag(TypeTag::new(bt)),
             BtfKind::Enum64 => Type::Enum64(Enum64::from_reader(reader, endianness, bt)?),
+            BtfKind::Unknown => return Err(Error::UnknownKind(bt.kind())),
         })
     }
 

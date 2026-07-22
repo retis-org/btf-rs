@@ -2,7 +2,7 @@ use std::{
     cmp,
     collections::HashMap,
     ffi::CStr,
-    io::{BufRead, Cursor, Seek, SeekFrom},
+    io::{BufRead, Cursor, Read, Seek, SeekFrom},
     mem,
     sync::Arc,
 };
@@ -109,6 +109,10 @@ impl BtfSection {
         self.0.header()
     }
 
+    fn layout(&self) -> &Layout {
+        self.0.layout()
+    }
+
     // Return the number of types in the section.
     fn types(&self) -> usize {
         self.0.types()
@@ -125,6 +129,8 @@ impl BtfSection {
 pub(super) trait BtfBackend {
     // Access the BTF header as a reference.
     fn header(&self) -> &cbtf::btf_header;
+    // Access the layout.
+    fn layout(&self) -> &Layout;
     // Return the type id offset.
     fn type_id_offset(&self) -> u32;
     // Return the number of types in the section.
@@ -145,6 +151,7 @@ pub(super) trait BtfBackend {
 // initialization and increase in memory footprint.
 struct CachedBtfSection {
     header: cbtf::btf_header,
+    layout: Layout,
     // Type id offset from the base, 0 if not.
     type_offset: u32,
     // Map from str offsets to the strings. For internal use (name resolution)
@@ -157,6 +164,8 @@ struct CachedBtfSection {
     // retrieval by their id implicit as the id is incremental in the BTF file;
     // but that is really the goal here.
     types: Vec<Type>,
+    // Map of type ids having an unknown kind mapped to their kind id.
+    unknown_kinds: HashMap<u32, u32>,
 }
 
 impl CachedBtfSection {
@@ -202,6 +211,12 @@ impl CachedBtfSection {
             offset += bytes;
         }
 
+        // Parse the kind layout, if any. Fallback on using the base one.
+        let layout = match header.layout_len {
+            0 if base.is_some() => base.as_ref().unwrap().layout().clone(),
+            _ => Layout::new(reader, &header, &endianness)?,
+        };
+
         // Finally build our representation of the BTF types.
         let offset = u64::checked_add(header.hdr_len as u64, header.type_off as u64)
             .ok_or(Error::Format("Invalid types section offset".to_string()))?;
@@ -209,6 +224,7 @@ impl CachedBtfSection {
 
         let mut strings: HashMap<String, Vec<u32>> = HashMap::with_capacity(est_str);
         let mut types = Vec::with_capacity(est_ty);
+        let mut unknown_kinds = HashMap::new();
 
         if base.is_none() {
             // Add special type Void with ID 0 (not described in type section)
@@ -220,8 +236,6 @@ impl CachedBtfSection {
             .ok_or(Error::Format("Invalid types section length".to_string()))?;
         while reader.stream_position()? < end_type_section {
             let bt = cbtf::btf_type::from_reader(reader, &endianness)?;
-            let r#type = Type::from_reader(reader, &endianness, bt)?;
-
             if let Some(name_off) = bt.name_offset() {
                 // Look for the name in our own cache, and if not found try
                 // looking into the base one (if any).
@@ -239,7 +253,14 @@ impl CachedBtfSection {
                 }
             }
 
-            types.push(r#type);
+            match cbtf::BtfKind::from_id(bt.kind()) {
+                cbtf::BtfKind::Unknown => {
+                    unknown_kinds.insert(id, bt.kind());
+                    layout.skip_type_vlen(reader, bt.kind(), bt.vlen())?
+                }
+                _ => types.push(Type::from_reader(reader, &endianness, bt)?),
+            };
+
             id += 1;
         }
 
@@ -250,6 +271,7 @@ impl CachedBtfSection {
 
         Ok(Self {
             header,
+            layout,
             type_offset: match base {
                 Some(base) => base.types() as u32,
                 None => 0,
@@ -257,6 +279,7 @@ impl CachedBtfSection {
             str_cache,
             strings,
             types,
+            unknown_kinds,
         })
     }
 }
@@ -264,6 +287,10 @@ impl CachedBtfSection {
 impl BtfBackend for CachedBtfSection {
     fn header(&self) -> &cbtf::btf_header {
         &self.header
+    }
+
+    fn layout(&self) -> &Layout {
+        &self.layout
     }
 
     fn type_id_offset(&self) -> u32 {
@@ -284,10 +311,13 @@ impl BtfBackend for CachedBtfSection {
             _ => return Err(Error::InvalidType(id)),
         };
 
-        self.types
-            .get(local_id as usize)
-            .cloned()
-            .ok_or(Error::InvalidType(id))
+        match self.types.get(local_id as usize) {
+            Some(r#type) => Ok(r#type.clone()),
+            None if let Some(kind) = self.unknown_kinds.get(&local_id) => {
+                Err(Error::UnknownKind(*kind))
+            }
+            _ => Err(Error::InvalidType(id)),
+        }
     }
 
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
@@ -314,6 +344,7 @@ impl BtfBackend for CachedBtfSection {
 struct MmapBtfSection {
     endianness: cbtf::Endianness,
     header: cbtf::btf_header,
+    layout: Layout,
     // String offset from the base, 0 if not.
     str_offset: u32,
     // Type id offset from the base, 0 if not.
@@ -359,6 +390,12 @@ impl MmapBtfSection {
             ));
         }
 
+        // Parse the kind layout, if any. Fallback on using the base one.
+        let layout = match header.layout_len {
+            0 if base.is_some() => base.as_ref().unwrap().layout().clone(),
+            _ => Layout::new(&mut reader, &header, &endianness)?,
+        };
+
         // Finally build our representation of the BTF types.
         let offset = u64::checked_add(header.hdr_len as u64, header.type_off as u64)
             .ok_or(Error::Format("Invalid types section offset".to_string()))?;
@@ -371,7 +408,7 @@ impl MmapBtfSection {
             .ok_or(Error::Format("Invalid types section length".to_string()))?;
         while reader.stream_position()? < end_type_section {
             offsets.push(reader.stream_position()? as usize);
-            cbtf::btf_skip_type(&mut reader, &endianness)?;
+            layout.skip_type(&mut reader, &endianness)?;
             types += 1;
         }
 
@@ -388,6 +425,7 @@ impl MmapBtfSection {
         Ok(Self {
             endianness,
             header,
+            layout,
             str_offset,
             type_offset,
             types,
@@ -427,6 +465,10 @@ impl BtfBackend for MmapBtfSection {
         &self.header
     }
 
+    fn layout(&self) -> &Layout {
+        &self.layout
+    }
+
     fn type_id_offset(&self) -> u32 {
         self.type_offset
     }
@@ -461,17 +503,21 @@ impl BtfBackend for MmapBtfSection {
             return Ok(Type::Void);
         }
 
-        Ok(match self.type_offsets.get(local_id as usize - 1) {
+        match self.type_offsets.get(local_id as usize - 1) {
             Some(offset) => {
                 let bt = cbtf::btf_type::from_bytes(&self.mmap[*offset..], &self.endianness)?;
+                if matches!(cbtf::BtfKind::from_id(bt.kind()), cbtf::BtfKind::Unknown) {
+                    return Err(Error::UnknownKind(bt.kind()));
+                }
+
                 Type::from_bytes(
                     &self.mmap[(*offset + mem::size_of::<cbtf::btf_type>())..],
                     &self.endianness,
                     bt,
-                )?
+                )
             }
-            None => return Err(Error::InvalidType(id)),
-        })
+            None => Err(Error::InvalidType(id)),
+        }
     }
 
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
@@ -520,4 +566,80 @@ fn bytes_to_str(buf: &[u8]) -> Result<&str> {
         .map_err(|e| Error::Format(format!("Could not parse string: {e}")))?
         .to_str()
         .map_err(|e| Error::Format(format!("Invalid UTF-8 string: {e}")))
+}
+
+#[derive(Clone)]
+pub(super) struct Layout {
+    layouts: Vec<cbtf::btf_layout>,
+}
+
+impl Layout {
+    fn new<R: Read + Seek>(
+        reader: &mut R,
+        header: &cbtf::btf_header,
+        endianness: &cbtf::Endianness,
+    ) -> Result<Self> {
+        let offset = u64::checked_add(header.hdr_len as u64, header.layout_off as u64).ok_or(
+            Error::Format("Invalid kind layouts section offset".to_string()),
+        )?;
+        reader.seek(SeekFrom::Start(offset))?;
+
+        let end_layout_section = u64::checked_add(offset, header.layout_len as u64).ok_or(
+            Error::Format("Invalid kind layouts section length".to_string()),
+        )?;
+
+        let mut layouts = Vec::new();
+        let mut id = 0;
+        while reader.stream_position()? < end_layout_section {
+            let bl = cbtf::btf_layout::from_reader(reader, endianness)?;
+
+            // Check the layout description matches our own, if any.
+            if let Some(refsz) = cbtf::BtfKind::from_id(id).size_of(1) {
+                if refsz != bl.size_of(1) {
+                    return Err(Error::Format(format!("Mismatch layout for kind {id}")));
+                }
+            }
+
+            layouts.push(bl);
+            id += 1;
+        }
+
+        Ok(Self { layouts })
+    }
+
+    // Given a kind is and its vlen returns the size it takes in memory.
+    fn kind_size_of(&self, id: u32, vlen: usize) -> Result<usize> {
+        // Use our internal knowledge by default and fallback on the layout
+        // description if the kind is not known.
+        Ok(match cbtf::BtfKind::from_id(id).size_of(vlen) {
+            Some(sz) => sz,
+            None => self
+                .layouts
+                .get(id as usize)
+                .ok_or(Error::Format(format!("Unknown size for kind {id}")))?
+                .size_of(vlen),
+        })
+    }
+
+    // Skip a BTF type defined in the provided seekable reader.
+    fn skip_type<R: Read + Seek>(
+        &self,
+        reader: &mut R,
+        endianness: &cbtf::Endianness,
+    ) -> Result<()> {
+        let bt = cbtf::btf_type::from_reader(reader, endianness)?;
+        self.skip_type_vlen(reader, bt.kind(), bt.vlen())
+    }
+
+    // Skip a BTF type vlen defined in the provided seekable reader.
+    fn skip_type_vlen<R: Read + Seek>(&self, reader: &mut R, kind: u32, vlen: u32) -> Result<()> {
+        // Handle Type::Void.
+        if kind == 0 {
+            return Ok(());
+        }
+
+        let skip = self.kind_size_of(kind, vlen as usize)? - mem::size_of::<cbtf::btf_type>();
+        reader.seek(SeekFrom::Current(skip as i64))?;
+        Ok(())
+    }
 }
