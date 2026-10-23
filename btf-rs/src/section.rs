@@ -476,7 +476,7 @@ impl BtfBackend for MmapBtfSection {
 
     fn resolve_name_by_offset(&self, offset: u32) -> Option<String> {
         let offset = match offset.checked_sub(self.str_offset) {
-            Some(id) if id <= self.header.str_len => id,
+            Some(offset) if offset < self.header.str_len => offset,
             _ => return None,
         };
 
