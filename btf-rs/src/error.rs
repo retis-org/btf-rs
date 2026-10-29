@@ -24,4 +24,7 @@ pub enum Error {
     /// Invalid string reference.
     #[error("no string at offset {0}")]
     InvalidString(u32),
+    /// Undefined kind. Might be valid but we don't know about it.
+    #[error("cannot handle type with unkwown kind {0}")]
+    UndefinedKind(u32),
 }
